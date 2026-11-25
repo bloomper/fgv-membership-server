@@ -1,0 +1,4 @@
+# For running on a developer's machine: Turnstile's own test key always passes, and without a key the check is skipped
+membership:
+  turnstile:
+    skip-without-key: true
