@@ -29,6 +29,8 @@ public enum MembershipHow {
     /** Paid by a revival for its participants */
     REVIVAL,
     WAIVED,
+    /** Paid online elsewhere, e.g. in the WordPress shop */
+    ONLINE,
     /** Copied from Spexregister when Medlemskap took over (spec 5.9) */
     MIGRATED
 }

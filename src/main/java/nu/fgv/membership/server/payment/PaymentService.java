@@ -142,6 +142,35 @@ public class PaymentService {
     }
 
     /**
+     * A payment made elsewhere (the WordPress shop): the memberships count at once, and what was asked and paid is kept
+     * as a matched request, so that it is bookkeeping like any other.
+     *
+     * @param actor the system that told us, by Keycloak subject
+     * @return the request, or empty when the spexare is already a member that year and nothing was recorded
+     */
+    @Transactional
+    public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
+                                                         final int amount, final LocalDate paidOn, final String note) {
+        if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(properties.membershipType())
+                && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
+            return java.util.Optional.empty();
+        }
+
+        final Membership membership = memberships.record(spexareId, properties.membershipType(), year, lifetime, MembershipStatus.PAID,
+                MembershipHow.ONLINE, note);
+        final PaymentRequest request = new PaymentRequest(newReference(year), spexareId, amount, actor, Set.of(membership.getId()), clock.instant());
+
+        request.matched();
+        requests.save(request);
+        payments.save(new Payment(request.getPk(), paidOn, amount, PaymentHow.ONLINE, actor, note, clock.instant()));
+
+        final PaymentView view = view(request, null);
+
+        spexregister.byIds(List.of(spexareId)).forEach(spexare -> mails.receipt(spexare, view));
+        return java.util.Optional.of(view);
+    }
+
+    /**
      * The payer says they paid, perhaps someone else on their behalf.
      */
     @Transactional
@@ -275,6 +304,7 @@ public class PaymentService {
             case SWISH -> MembershipHow.SWISH;
             case BANK_TRANSFER -> MembershipHow.BANK_TRANSFER;
             case CASH -> MembershipHow.CASH;
+            case ONLINE -> MembershipHow.ONLINE;
         };
     }
 

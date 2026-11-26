@@ -81,7 +81,7 @@ membership:
   mail:
     from: ${API_MAIL_FROM:${SMTP_FROM:noreply@localhost}}
   security:
-    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service}
+    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service,fgv-wordpress-service}
   # The roles people hold on each application, lowest first. Granting a role grants the ones before it.
   # Service roles (SYNC, NOTIFY, IMPORT, REVIVAL, ...) are never listed.
   applications:
@@ -113,3 +113,6 @@ membership:
     swish-number: ${API_PAYMENT_SWISH_NUMBER:}
     bank-account: ${API_PAYMENT_BANK_ACCOUNT:}
     payee-name: ${API_PAYMENT_PAYEE_NAME:FGV}
+  default-access:
+    # Applications that new accounts made from an outside payment get no access to (comma separated client ids)
+    excluded: ${API_DEFAULT_ACCESS_EXCLUDED:fgv-revival}

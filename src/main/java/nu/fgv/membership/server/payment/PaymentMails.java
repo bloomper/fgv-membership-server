@@ -55,6 +55,18 @@ public class PaymentMails {
                         properties.bankAccount() == null ? "" : properties.bankAccount(), webUrl + "/membership/pay/" + request.id()));
     }
 
+    /**
+     * Tells someone that an account has been made for them, because they paid online. A separate message from the login
+     * service has the link to choose a password.
+     */
+    public void accountCreated(final String userId, final String email) {
+        try {
+            mailer.send(email, mailer.text(LOCALE, "mail.account.subject"), mailer.text(LOCALE, "mail.account.body", webUrl));
+        } catch (final MailException e) {
+            log.error("Could not tell {} that an account was created", userId, e);
+        }
+    }
+
     public void receipt(final Spexare spexare, final PaymentView request) {
         send(spexare, mailer.text(LOCALE, "mail.payment.receipt.subject"),
                 mailer.text(LOCALE, "mail.payment.receipt.body", request.amount(), request.reference(),

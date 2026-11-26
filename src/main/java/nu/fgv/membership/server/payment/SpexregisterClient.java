@@ -34,4 +34,15 @@ public interface SpexregisterClient {
     Optional<Spexare> forUser(String userId);
 
     List<Spexare> byIds(List<String> ids);
+
+    /**
+     * @return the spexare with this email address, if there is exactly one
+     */
+    Optional<Spexare> byEmail(String email);
+
+    /**
+     * Creates a spexare for someone who is not in the register yet, e.g. a new member who paid online. Spexregister links
+     * the spexare to the user's account by email.
+     */
+    Spexare create(String firstName, String lastName, String email);
 }

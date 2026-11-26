@@ -23,5 +23,7 @@ package nu.fgv.membership.server.payment;
 public enum PaymentHow {
     SWISH,
     BANK_TRANSFER,
-    CASH
+    CASH,
+    /** Paid online elsewhere, e.g. in the WordPress shop */
+    ONLINE
 }
