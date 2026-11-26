@@ -63,7 +63,7 @@ class AccessServiceTest {
     void giving_admin_gives_editor_and_user_too() {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
-        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "ADMIN");
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "ADMIN", true);
 
         assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).containsExactlyInAnyOrder("USER", "EDITOR", "ADMIN");
     }
@@ -73,7 +73,7 @@ class AccessServiceTest {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
         keycloak.giveRoles(user.id(), "fgv-spexregister", "USER", "EDITOR", "ADMIN");
-        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "USER");
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "USER", true);
 
         assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).containsExactly("USER");
     }
@@ -83,7 +83,7 @@ class AccessServiceTest {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
         keycloak.giveRoles(user.id(), "fgv-spexregister", "USER", "EDITOR", "NOTIFY");
-        service.setAccess(admin.id(), user.id(), "fgv-spexregister", null);
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", null, true);
 
         assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).containsExactly("NOTIFY");
     }
@@ -92,7 +92,7 @@ class AccessServiceTest {
     void first_access_approves_a_pending_user_and_sends_one_email_listing_the_applications() {
         final KeycloakUser user = keycloak.addUser("new@fgv.nu", true, true);
 
-        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "USER");
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "USER", true);
 
         assertThat(keycloak.isMemberOfGroup(user.id(), "pending-approval")).isFalse();
         verify(mails).approved(any(), anyList());
@@ -104,7 +104,7 @@ class AccessServiceTest {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
         keycloak.giveRoles(user.id(), "fgv-spexregister", "USER");
-        service.setAccess(admin.id(), user.id(), "fgv-spexify", "USER");
+        service.setAccess(admin.id(), user.id(), "fgv-spexify", "USER", true);
 
         verify(mails).firstAccess(any(), any());
     }
@@ -114,7 +114,7 @@ class AccessServiceTest {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
         keycloak.giveRoles(user.id(), "fgv-spexregister", "USER");
-        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "EDITOR");
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "EDITOR", true);
 
         verifyNoInteractions(mails);
     }
@@ -123,14 +123,14 @@ class AccessServiceTest {
     void an_unknown_role_is_refused() {
         final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
 
-        assertThatThrownBy(() -> service.setAccess(admin.id(), user.id(), "fgv-spexregister", "SYNC")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.setAccess(admin.id(), user.id(), "fgv-spexregister", "SYNC", true)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void an_administrator_cannot_demote_themselves() {
         keycloak.addUser("other@fgv.nu", false, true);
 
-        assertThatThrownBy(() -> service.setAccess(admin.id(), admin.id(), "fgv-membership", "BOARD")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.setAccess(admin.id(), admin.id(), "fgv-membership", "BOARD", true)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -139,11 +139,11 @@ class AccessServiceTest {
 
         keycloak.giveRoles(other.id(), "fgv-membership", "USER", "BOARD", "TREASURER", "ADMIN");
         // the administrator removes the other administrator: fine
-        service.setAccess(admin.id(), other.id(), "fgv-membership", "USER");
+        service.setAccess(admin.id(), other.id(), "fgv-membership", "USER", true);
         // and now nobody may remove the last
         keycloak.giveRoles(other.id(), "fgv-membership", "USER", "BOARD", "TREASURER", "ADMIN");
         keycloak.users.remove(admin.id());
-        assertThatThrownBy(() -> service.setAccess("someone", other.id(), "fgv-membership", "USER")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.setAccess("someone", other.id(), "fgv-membership", "USER", true)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> service.setEnabled("someone", other.id(), false)).isInstanceOf(IllegalStateException.class);
     }
 
@@ -162,10 +162,41 @@ class AccessServiceTest {
         final KeycloakUser approved = keycloak.addUser("a@fgv.nu", false, true);
         final KeycloakUser pending = keycloak.addUser("p@fgv.nu", true, true);
 
-        assertThatThrownBy(() -> service.reject(admin.id(), approved.id(), null)).isInstanceOf(IllegalStateException.class);
-        service.reject(admin.id(), pending.id(), "No thanks");
+        assertThatThrownBy(() -> service.reject(admin.id(), approved.id(), null, true)).isInstanceOf(IllegalStateException.class);
+        service.reject(admin.id(), pending.id(), "No thanks", true);
 
         assertThat(keycloak.users).doesNotContainKey(pending.id());
         verify(mails).rejected(any(), org.mockito.ArgumentMatchers.eq("No thanks"));
+    }
+
+    @Test
+    void an_update_without_notification_sends_no_email_but_still_approves() {
+        final KeycloakUser user = keycloak.addUser("new@fgv.nu", true, true);
+
+        service.setAccess(admin.id(), user.id(), "fgv-spexregister", "USER", false);
+
+        assertThat(keycloak.isMemberOfGroup(user.id(), "pending-approval")).isFalse();
+        assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).contains("USER");
+        verifyNoInteractions(mails);
+    }
+
+    @Test
+    void a_further_application_without_notification_sends_no_first_access_email() {
+        final KeycloakUser user = keycloak.addUser("a@fgv.nu", false, true);
+
+        keycloak.giveRoles(user.id(), "fgv-spexregister", "USER");
+        service.setAccess(admin.id(), user.id(), "fgv-spexify", "USER", false);
+
+        verifyNoInteractions(mails);
+    }
+
+    @Test
+    void a_rejection_without_notification_removes_the_account_silently() {
+        final KeycloakUser pending = keycloak.addUser("p@fgv.nu", true, true);
+
+        service.reject(admin.id(), pending.id(), "No thanks", false);
+
+        assertThat(keycloak.users).doesNotContainKey(pending.id());
+        verifyNoInteractions(mails);
     }
 }

@@ -71,9 +71,12 @@ public class AccessService {
      * Sets the highest role a user holds on an application, giving the roles below it and taking away the ones above;
      * {@code null} takes away all access to the application.
      *
-     * @param actor the administrator, by Keycloak subject
+     * @param actor  the administrator, by Keycloak subject
+     * @param notify whether to email the user about this update; chosen by the administrator for each update. A user
+     *               who is given their first access is moved out of the pending group either way.
      */
-    public ApplicationAccess setAccess(final String actor, final String userId, final String clientId, final String role) {
+    public ApplicationAccess setAccess(final String actor, final String userId, final String clientId, final String role,
+                                       final boolean notify) {
         final ApplicationCatalog.Entry entry = catalog.find(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown application " + clientId));
         final KeycloakUser user = keycloak.findUser(userId).orElseThrow(() -> new IllegalArgumentException("Unknown user " + userId));
@@ -96,7 +99,7 @@ public class AccessService {
         }
 
         if (role != null && !applicationsBefore.contains(clientId)) {
-            afterGrant(user, wasApproved, applicationsBefore, entry);
+            afterGrant(user, wasApproved, entry, notify);
         }
         return accessOf(userId).stream().filter(a -> a.clientId().equals(clientId)).findFirst().orElseThrow();
     }
@@ -119,9 +122,9 @@ public class AccessService {
     }
 
     /**
-     * Removes a pending user's account, with an optional message by email.
+     * Removes a pending user's account. With {@code notify} the user is told by email, with the optional message.
      */
-    public void reject(final String actor, final String userId, final String message) {
+    public void reject(final String actor, final String userId, final String message, final boolean notify) {
         final KeycloakUser user = keycloak.findUser(userId).orElseThrow(() -> new IllegalArgumentException("Unknown user " + userId));
 
         if (isApproved(user)) {
@@ -129,7 +132,9 @@ public class AccessService {
         }
         keycloak.deleteUser(userId);
         changes.save(new AccessChange(userId, actor, "REJECT", null, null, null));
-        mails.rejected(user, message);
+        if (notify) {
+            mails.rejected(user, message);
+        }
     }
 
     /**
@@ -140,11 +145,13 @@ public class AccessService {
         return !keycloak.isMemberOfGroup(user.id(), properties.keycloak().pendingGroup());
     }
 
-    private void afterGrant(final KeycloakUser user, final boolean wasApproved, final Set<String> before, final ApplicationCatalog.Entry entry) {
+    private void afterGrant(final KeycloakUser user, final boolean wasApproved, final ApplicationCatalog.Entry entry, final boolean notify) {
         if (!wasApproved) {
             keycloak.leaveGroup(user.id(), properties.keycloak().pendingGroup());
-            mails.approved(user, applicationsWithAccess(user.id()));
-        } else {
+            if (notify) {
+                mails.approved(user, applicationsWithAccess(user.id()));
+            }
+        } else if (notify) {
             mails.firstAccess(user, entry.client());
         }
     }

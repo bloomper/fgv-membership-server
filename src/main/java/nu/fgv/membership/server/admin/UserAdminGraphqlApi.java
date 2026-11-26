@@ -89,13 +89,15 @@ public class UserAdminGraphqlApi {
 
     @MutationMapping
     public ApplicationAccess setApplicationAccess(@AuthenticationPrincipal final Jwt actor, @Argument final String userId,
-                                                  @Argument final String clientId, @Argument final String role) {
-        return access.setAccess(actor.getSubject(), userId, clientId, role);
+                                                  @Argument final String clientId, @Argument final String role,
+                                                  @Argument final Boolean notify) {
+        return access.setAccess(actor.getSubject(), userId, clientId, role, notify == null || notify);
     }
 
     @MutationMapping
-    public boolean rejectUser(@AuthenticationPrincipal final Jwt actor, @Argument final String id, @Argument final String message) {
-        access.reject(actor.getSubject(), id, message);
+    public boolean rejectUser(@AuthenticationPrincipal final Jwt actor, @Argument final String id, @Argument final String message,
+                                @Argument final Boolean notify) {
+        access.reject(actor.getSubject(), id, message, notify == null || notify);
         return true;
     }
 
