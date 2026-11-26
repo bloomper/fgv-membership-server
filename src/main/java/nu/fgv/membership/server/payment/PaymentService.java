@@ -34,6 +34,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -99,12 +100,29 @@ public class PaymentService {
         return request(spexareOf(userId).id(), userId, feeLevelIds);
     }
 
+    static final int MAX_FAMILY = 10;
+
     /**
      * @param spexareId whose memberships these are
      * @param createdBy who asks: the user, or later the board
      */
     @Transactional
     public PaymentView request(final String spexareId, final String createdBy, final List<String> feeLevelIds) {
+        return request(spexareId, createdBy, feeLevelIds, null, List.of());
+    }
+
+    /**
+     * Asks to pay fee levels, each for a year or for life. With a family fee one request pays for the whole family: the payer
+     * is a member and so is everyone in {@code familyMemberIds}, who share a family id. The payer may say who the others
+     * are in {@code familyNote} (free text, since names stay in Spexregister) for the board to attach them, which can also
+     * be done later with {@link #addFamilyMembers}.
+     *
+     * @param familyNote      who the payer says the family members are; only kept for a family fee
+     * @param familyMemberIds the other family members, by spexare, when they are known
+     */
+    @Transactional
+    public PaymentView request(final String spexareId, final String createdBy, final List<String> feeLevelIds, final String familyNote,
+                               final List<String> familyMemberIds) {
         if (feeLevelIds == null || feeLevelIds.isEmpty()) {
             throw new IllegalArgumentException("Pick at least one fee");
         }
@@ -112,8 +130,11 @@ public class PaymentService {
         final int thisYear = Year.now(clock.withZone(ZONE)).getValue();
         final Set<String> membershipIds = new LinkedHashSet<>();
         final Set<Integer> years = new LinkedHashSet<>();
+        final List<String> others = familyMemberIds == null ? List.of() : familyMemberIds.stream().filter(id -> !id.equals(spexareId)).distinct().toList();
+        final String familyId = UUID.randomUUID().toString();
         int total = 0;
         boolean lifetimeChosen = false;
+        boolean family = false;
 
         for (final String id : new LinkedHashSet<>(feeLevelIds)) {
             final FeeLevel level = fees.findById(id).orElseThrow(() -> new IllegalArgumentException("Unknown fee " + id));
@@ -128,17 +149,87 @@ public class PaymentService {
                 throw new IllegalArgumentException("Pick one fee for each year");
             }
             lifetimeChosen |= level.isLifetime();
-            if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(level.getType())
-                    && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
-                throw new IllegalArgumentException("Already a member for " + year);
+            refuseIfMember(spexareId, level, year);
+            if (level.isFamily()) {
+                family = true;
+                if (others.size() + 1 > MAX_FAMILY) {
+                    throw new IllegalArgumentException("A family can have at most %d members".formatted(MAX_FAMILY));
+                }
+                others.forEach(other -> refuseIfMember(other, level, year));
             }
-            membershipIds.add(memberships.record(spexareId, level.getType(), year, level.isLifetime(), MembershipStatus.PENDING, null, null).getId());
+
+            final Membership payer = memberships.record(spexareId, level.getType(), year, level.isLifetime(), MembershipStatus.PENDING, null, null);
+
+            membershipIds.add(payer.getId());
+            if (level.isFamily()) {
+                payer.setFamilyId(familyId);
+                for (final String other : others) {
+                    final Membership member = memberships.record(other, level.getType(), year, false, MembershipStatus.PENDING, null, null);
+
+                    member.setFamilyId(familyId);
+                    membershipIds.add(member.getId());
+                }
+            }
             total += level.getAmount();
         }
 
-        final PaymentRequest request = requests.save(new PaymentRequest(newReference(thisYear), spexareId, total, createdBy,
-                membershipIds, clock.instant()));
+        final PaymentRequest request = new PaymentRequest(newReference(thisYear), spexareId, total, createdBy, membershipIds, clock.instant());
 
+        if (family) {
+            request.family(familyId, familyNote == null || familyNote.isBlank() ? null : familyNote.strip().substring(0, Math.min(500, familyNote.strip().length())));
+        }
+        return view(requests.save(request), null);
+    }
+
+    private void refuseIfMember(final String spexareId, final FeeLevel level, final int year) {
+        if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(level.getType())
+                && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
+            throw new IllegalArgumentException("Already a member for " + year);
+        }
+    }
+
+    /**
+     * Attaches family members to a family request, by the board: they get the membership too, in the state the payer's is
+     * in (so paid when the request is paid). Members who already are members that year are refused.
+     */
+    @Transactional
+    public PaymentView addFamilyMembers(final String requestId, final List<String> spexareIds) {
+        final PaymentRequest request = find(requestId);
+
+        if (request.getFamilyId() == null) {
+            throw new IllegalStateException("That is not a family request");
+        }
+        if (request.getStatus() == PaymentStatus.CANCELLED) {
+            throw new IllegalStateException("The request is cancelled");
+        }
+
+        final List<Membership> payers = request.getMembershipIds().stream().map(id -> membershipRepository.findById(id).orElse(null))
+                .filter(java.util.Objects::nonNull).filter(m -> m.getSpexareId().equals(request.getSpexareId())).toList();
+        final List<String> wanted = spexareIds.stream().filter(id -> !id.equals(request.getSpexareId())).distinct().toList();
+        final long people = request.getMembershipIds().stream().map(id -> membershipRepository.findById(id).orElse(null)).filter(java.util.Objects::nonNull)
+                .map(Membership::getSpexareId).distinct().count();
+
+        if (people + wanted.stream().filter(id -> request.getMembershipIds().stream().map(m -> membershipRepository.findById(m).orElse(null))
+                .filter(java.util.Objects::nonNull).noneMatch(m -> m.getSpexareId().equals(id))).count() > MAX_FAMILY) {
+            throw new IllegalArgumentException("A family can have at most %d members".formatted(MAX_FAMILY));
+        }
+        for (final Membership payer : payers) {
+            for (final String id : wanted) {
+                if (request.getMembershipIds().stream().map(m -> membershipRepository.findById(m).orElse(null)).filter(java.util.Objects::nonNull)
+                        .anyMatch(m -> m.getSpexareId().equals(id) && m.getYear() == payer.getYear())) {
+                    continue;
+                }
+                if (membershipRepository.findBySpexareId(id).stream().anyMatch(existing -> existing.getType().equals(payer.getType()) && existing.counts()
+                        && (existing.isLifetime() && existing.getYear() <= payer.getYear() || existing.getYear() == payer.getYear()))) {
+                    throw new IllegalArgumentException("Already a member for " + payer.getYear());
+                }
+
+                final Membership member = memberships.record(id, payer.getType(), payer.getYear(), false, payer.getStatus(), payer.getHow(), payer.getNote());
+
+                member.setFamilyId(request.getFamilyId());
+                request.getMembershipIds().add(member.getId());
+            }
+        }
         return view(request, null);
     }
 
@@ -343,6 +434,14 @@ public class PaymentService {
     }
 
     /**
+     * @return the people a request's memberships are for, by name
+     */
+    @Transactional(readOnly = true)
+    public List<Spexare> peopleOf(final PaymentView request) {
+        return spexregister.byIds(request.memberships().stream().map(PaymentView.Item::spexareId).filter(java.util.Objects::nonNull).distinct().toList());
+    }
+
+    /**
      * @return what a request still lacks, in whole kronor
      */
     public int remaining(final PaymentRequest request) {
@@ -474,8 +573,8 @@ public class PaymentService {
 
         final FeeLevel level = fees.findById(feeLevelId).orElseThrow(() -> new IllegalArgumentException("Unknown fee"));
 
-        if (level.isLifetime() || level.getYear() == null || level.isRetired()) {
-            throw new IllegalArgumentException("Pick a yearly fee");
+        if (level.getKind() != FeeKind.STANDARD || level.getYear() == null || level.isRetired()) {
+            throw new IllegalArgumentException("Pick a standard yearly fee");
         }
 
         final int year = level.getYear();
@@ -528,11 +627,13 @@ public class PaymentService {
         final List<PaymentView.Item> items = request.getMembershipIds().stream()
                 .map(id -> membershipRepository.findById(id).orElse(null)).filter(java.util.Objects::nonNull)
                 .sorted(java.util.Comparator.comparingInt(Membership::getYear))
-                .map(m -> new PaymentView.Item(m.getId(), m.getYear(), m.isLifetime(), m.getStatus().name())).toList();
+                .map(m -> new PaymentView.Item(m.getId(), m.getYear(), m.isLifetime(), m.getStatus().name(), m.getSpexareId(), m.getFamilyId() != null)).toList();
 
         return new PaymentView(request.getId(), request.getReference(), request.getAmount(), request.getStatus(), request.getCreatedAt(),
                 request.getReportedAt(), request.getPaidBy(), request.getSpexareId(),
                 spexare != null ? spexare.name() : request.getPayerLabel(), items,
-                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request));
+                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request),
+                request.getFamilyNote(), request.getFamilyId() != null,
+                request.getFamilyId() != null && items.stream().map(PaymentView.Item::spexareId).distinct().count() < 2);
     }
 }

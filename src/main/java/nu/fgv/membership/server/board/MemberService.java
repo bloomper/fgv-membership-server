@@ -62,7 +62,7 @@ public class MemberService {
      * @param wasMemberLastYear whether they counted as a member the year before
      */
     public record Member(String membershipId, String spexareId, String name, String type, int year, boolean lifetime, String status, String how,
-                         String note, boolean optedOut, boolean wasMemberLastYear) {
+                         String note, boolean optedOut, boolean wasMemberLastYear, boolean family) {
     }
 
     /**
@@ -88,7 +88,7 @@ public class MemberService {
         final StringBuilder sql = new StringBuilder("""
                 SELECT m.id, m.spexare_id, m.type, m.membership_year, m.lifetime, m.status, m.how, m.note,
                        (SELECT COUNT(*) FROM reminder_opt_out o WHERE o.spexare_id = m.spexare_id) AS opted_out,
-                       %s AS last_year
+                       %s AS last_year, (m.family_id IS NOT NULL) AS family
                 FROM membership m
                 WHERE m.type = 'FGV' AND (m.membership_year = :year OR (m.lifetime AND m.membership_year <= :year))
                 """.formatted(previous));
@@ -106,7 +106,7 @@ public class MemberService {
         final var withHow = how == null ? withStatus : withStatus.param("how", how);
         final List<Member> rows = withHow.query((rs, i) -> new Member(rs.getString("id"), rs.getString("spexare_id"), null, rs.getString("type"),
                 rs.getInt("membership_year"), rs.getBoolean("lifetime"), rs.getString("status"), rs.getString("how"), rs.getString("note"),
-                rs.getInt("opted_out") > 0, rs.getInt("last_year") > 0)).list();
+                rs.getInt("opted_out") > 0, rs.getInt("last_year") > 0, rs.getBoolean("family"))).list();
 
         return named(rows);
     }
@@ -153,7 +153,7 @@ public class MemberService {
         final Collator collator = Collator.getInstance(Locale.of("sv"));
 
         return rows.stream().map(row -> new Member(row.membershipId(), row.spexareId(), names.get(row.spexareId()), row.type(), row.year(), row.lifetime(),
-                        row.status(), row.how(), row.note(), row.optedOut(), row.wasMemberLastYear()))
+                        row.status(), row.how(), row.note(), row.optedOut(), row.wasMemberLastYear(), row.family()))
                 .sorted(java.util.Comparator.comparing((Member row) -> row.name() == null ? "\uFFFF" + row.spexareId() : row.name(), collator)
                         .thenComparing(Member::year)).toList();
     }

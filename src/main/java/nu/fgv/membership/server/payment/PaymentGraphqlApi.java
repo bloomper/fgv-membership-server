@@ -66,10 +66,10 @@ public class PaymentGraphqlApi {
     public record MembershipItem(String id, String type, int year, boolean lifetime, String status) {
     }
 
-    public record FeeLevelView(String id, Integer year, boolean lifetime, String nameSv, String nameEn, int amount, boolean retired) {
+    public record FeeLevelView(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn, int amount, boolean retired) {
     }
 
-    public record FeeLevelInput(String id, Integer year, boolean lifetime, String nameSv, String nameEn, int amount) {
+    public record FeeLevelInput(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn, int amount) {
     }
 
     /**
@@ -107,14 +107,32 @@ public class PaymentGraphqlApi {
 
     @MutationMapping
     @PreAuthorize(USER)
-    public PaymentView requestPayment(@AuthenticationPrincipal final Jwt caller, @Argument final List<String> feeLevelIds) {
-        return payments.request(caller.getSubject(), feeLevelIds);
+    public PaymentView requestPayment(@AuthenticationPrincipal final Jwt caller, @Argument final List<String> feeLevelIds, @Argument final String familyNote) {
+        return payments.request(payments.spexareOf(caller.getSubject()).id(), caller.getSubject(), feeLevelIds, familyNote, List.of());
     }
 
     @MutationMapping
     @PreAuthorize(USER)
     public PaymentView reportPaid(@AuthenticationPrincipal final Jwt caller, @Argument final String id, @Argument final String paidBy) {
         return payments.report(caller.getSubject(), id, paidBy);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasRole('fgv-membership_BOARD')")
+    public PaymentView addFamilyMembers(@AuthenticationPrincipal final Jwt caller, @Argument final String requestId, @Argument final List<String> spexareIds) {
+        final PaymentView view = payments.addFamilyMembers(requestId, spexareIds);
+
+        audit.log(caller.getSubject(), "FAMILY_MEMBERS_ADDED", view.reference(), spexareIds.size() + " added");
+        return view;
+    }
+
+    /**
+     * Who a family request is for, named from Spexregister; only the board sees the names.
+     */
+    @SchemaMapping(typeName = "PaymentRequest")
+    @PreAuthorize("hasRole('fgv-membership_BOARD')")
+    public List<Spexare> familyMembers(final PaymentView request) {
+        return payments.peopleOf(request);
     }
 
     /**
@@ -172,10 +190,10 @@ public class PaymentGraphqlApi {
     @MutationMapping
     @PreAuthorize(ADMIN)
     public FeeLevelView feeLevelSave(@AuthenticationPrincipal final Jwt caller, @Argument final FeeLevelInput input) {
-        final FeeLevelView saved = view(fees.save(input.id(), input.year(), input.lifetime(), input.nameSv(), input.nameEn(), input.amount()));
+        final FeeLevelView saved = view(fees.save(input.id(), input.year(), input.kind() != null ? input.kind() : input.lifetime() ? FeeKind.LIFETIME : FeeKind.STANDARD, input.nameSv(), input.nameEn(), input.amount()));
 
         audit.log(caller.getSubject(), input.id() == null ? "FEE_ADDED" : "FEE_CHANGED", saved.id(), "%s %s: %d kr".formatted(
-                saved.lifetime() ? "life" : String.valueOf(saved.year()), saved.nameEn(), saved.amount()));
+                saved.kind() + " " + (saved.year() == null ? "" : saved.year()), saved.nameEn(), saved.amount()));
         return saved;
     }
 
@@ -191,7 +209,7 @@ public class PaymentGraphqlApi {
     }
 
     private static FeeLevelView view(final FeeLevel level) {
-        return new FeeLevelView(level.getId(), level.getYear(), level.isLifetime(), level.getNameSv(), level.getNameEn(), level.getAmount(),
+        return new FeeLevelView(level.getId(), level.getYear(), level.getKind(), level.isLifetime(), level.getNameSv(), level.getNameEn(), level.getAmount(),
                 level.isRetired());
     }
 }

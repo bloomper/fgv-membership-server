@@ -45,7 +45,11 @@ public class FeeService {
      */
     @Transactional(readOnly = true)
     public List<FeeLevel> available(final Integer year) {
+        final int thisYear = java.time.Year.now(clock.withZone(java.time.ZoneId.of("Europe/Stockholm"))).getValue();
+
         return fees.findByRetiredFalseOrderByAmountDesc().stream()
+                // A life fee that starts in a later year is not offered yet
+                .filter(level -> !level.isLifetime() || level.getYear() == null || level.getYear() <= thisYear)
                 .filter(level -> year == null || level.isLifetime() || year.equals(level.getYear())).toList();
     }
 
@@ -56,16 +60,21 @@ public class FeeService {
 
     @Transactional
     public FeeLevel save(final String id, final Integer year, final boolean lifetime, final String nameSv, final String nameEn, final int amount) {
+        return save(id, year, lifetime ? FeeKind.LIFETIME : FeeKind.STANDARD, nameSv, nameEn, amount);
+    }
+
+    @Transactional
+    public FeeLevel save(final String id, final Integer year, final FeeKind kind, final String nameSv, final String nameEn, final int amount) {
         if (nameSv == null || nameSv.isBlank() || nameEn == null || nameEn.isBlank()) {
             throw new IllegalArgumentException("A fee level needs a name in Swedish and in English");
         }
         if (id == null) {
-            return fees.save(new FeeLevel(Membership.FGV, year, lifetime, nameSv.strip(), nameEn.strip(), amount, clock.instant()));
+            return fees.save(new FeeLevel(Membership.FGV, year, kind, nameSv.strip(), nameEn.strip(), amount, clock.instant()));
         }
 
         final FeeLevel level = fees.findById(id).orElseThrow(() -> new IllegalArgumentException("Unknown fee level " + id));
 
-        level.update(year, lifetime, nameSv.strip(), nameEn.strip(), amount);
+        level.update(year, kind, nameSv.strip(), nameEn.strip(), amount);
         return level;
     }
 

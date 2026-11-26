@@ -92,12 +92,13 @@ public class RenewalService {
     }
 
     /**
-     * Last year's members who have nothing for the year, are not for life and did not opt out.
+     * Last year's members who have nothing for the year, are not for life and did not opt out. Family memberships are left
+     * out: a family renews with a family fee, which the board asks for on the member's page.
      */
     public List<String> group(final int year) {
         return jdbc.sql("""
                         SELECT DISTINCT m.spexare_id FROM membership m
-                        WHERE m.type = 'FGV' AND m.status IN ('PAID', 'WAIVED') AND m.membership_year = :last
+                        WHERE m.type = 'FGV' AND m.status IN ('PAID', 'WAIVED') AND m.membership_year = :last AND m.family_id IS NULL
                           AND NOT EXISTS (SELECT 1 FROM membership l WHERE l.spexare_id = m.spexare_id AND l.type = m.type AND l.lifetime
                                           AND l.status IN ('PAID', 'WAIVED') AND l.membership_year <= :last)
                           AND NOT EXISTS (SELECT 1 FROM membership n WHERE n.spexare_id = m.spexare_id AND n.type = m.type AND n.membership_year = :year
@@ -112,7 +113,7 @@ public class RenewalService {
         final List<String> sample = ids.isEmpty() ? List.of() : spexregister.byIds(ids.subList(0, Math.min(10, ids.size()))).stream().map(Spexare::name).toList();
 
         return new Preview(year, ids.size(), sample, "Förnya ditt medlemskap i FGV",
-                "Dags att förnya medlemskapet i FGV för %d: %d kr, med en personlig länk för att betala. Mottagaren kan välja att inte få fler påminnelser.".formatted(year, fee.getAmount()));
+                "Dags att förnya medlemskapet i FGV för %d: %d kr, med en personlig länk för att betala. Mottagaren kan välja att inte få fler påminnelser. Familjemedlemskap påminns inte här: styrelsen ber familjen att betala från medlemmens sida.".formatted(year, fee.getAmount()));
     }
 
     /**
@@ -168,7 +169,7 @@ public class RenewalService {
     private FeeLevel fee(final int year, final String feeLevelId) {
         final FeeLevel fee = fees.findById(feeLevelId).orElseThrow(() -> new IllegalArgumentException("Unknown fee"));
 
-        if (fee.isLifetime() || fee.getYear() == null || fee.getYear() != year || fee.isRetired()) {
+        if (fee.getKind() != nu.fgv.membership.server.payment.FeeKind.STANDARD || fee.getYear() == null || fee.getYear() != year || fee.isRetired()) {
             throw new IllegalArgumentException("Pick a fee for " + year);
         }
         return fee;

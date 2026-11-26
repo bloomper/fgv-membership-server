@@ -36,6 +36,8 @@ type Member {
     "Chose not to be reminded"
     optedOut: Boolean!
     wasMemberLastYear: Boolean!
+    "Part of a family membership"
+    family: Boolean!
 }
 
 type MemberCount {

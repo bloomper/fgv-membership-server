@@ -111,7 +111,7 @@ class ExternalPaymentServiceTest {
         when(spexregister.create(anyString(), anyString(), anyString())).thenReturn(new Spexare("sp-1", "Greta", "Garbo", "greta@example.org"));
         when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyInt(), any(), anyString()))
                 .thenReturn(Optional.of(new PaymentView("req-1", "FGV26ABCD", 200, PaymentStatus.MATCHED, clock.instant(), null, null, "sp-1", null,
-                        List.of(), null, null, 200)));
+                        List.of(), null, null, 200, null, false, false)));
 
         service = new ExternalPaymentService(externals, spexregister, keycloak, defaults, payments, mails, mock(PlatformTransactionManager.class), clock);
     }

@@ -27,8 +27,16 @@ extend type Query {
 }
 
 extend type Mutation {
-    "USER. Asks to pay these fee levels (one for each year, or the life fee). The memberships are created as pending."
-    requestPayment(feeLevelIds: [ID!]!): PaymentRequest!
+    """
+    USER. Asks to pay these fee levels (one for each year, or the life fee). The memberships are created as pending. With a
+    family fee the payer says who the other family members are in familyNote, and the board attaches them.
+    """
+    requestPayment(feeLevelIds: [ID!]!, familyNote: String): PaymentRequest!
+    """
+    BOARD. Gives these spexare the membership that a family request pays for, in the state the payer's is in. Up to 10 people
+    in a family.
+    """
+    addFamilyMembers(requestId: ID!, spexareIds: [ID!]!): PaymentRequest!
     "USER. Says that the request is paid, perhaps by someone else (paidBy)."
     reportPaid(id: ID!, paidBy: String): PaymentRequest!
     "TREASURER. The money arrived: the memberships become paid and the payer gets a receipt. paidOn is a date, yyyy-mm-dd."
@@ -41,11 +49,22 @@ extend type Mutation {
     feeLevelRetire(id: ID!, retired: Boolean!): FeeLevel!
 }
 
+enum FeeKind {
+    "One person, for a year"
+    STANDARD
+    "A family, for a year: one pays and every family member is a member"
+    FAMILY
+    "One person, for life from the year it is paid"
+    LIFETIME
+}
+
 input FeeLevelInput {
     id: ID
-    "Null for the one-time life fee"
+    "The year a yearly fee is for; for a life fee the first year it is offered, or null"
     year: Int
+    "Use kind; lifetime true means LIFETIME when kind is not given"
     lifetime: Boolean! = false
+    kind: FeeKind
     nameSv: String!
     nameEn: String!
     "Whole kronor"
@@ -55,6 +74,7 @@ input FeeLevelInput {
 type FeeLevel {
     id: ID!
     year: Int
+    kind: FeeKind!
     lifetime: Boolean!
     nameSv: String!
     nameEn: String!
@@ -91,6 +111,14 @@ type PaymentRequest {
     spexareName: String
     "What has been paid so far, in whole kronor; less than amount leaves the request open"
     paid: Int!
+    "A family request: one pays and the whole family is a member"
+    family: Boolean!
+    "Who the payer said the other family members are"
+    familyNote: String
+    "A family request that only has the payer so far: the board has to attach the others"
+    familyIncomplete: Boolean!
+    "BOARD. The people the request's memberships are for"
+    familyMembers: [SpexarePerson!]!
     memberships: [PaymentItem!]!
     payee: Payee!
     "Opens Swish with number, amount and reference filled in, on a phone. Null once paid or when there is no Swish number."
@@ -101,6 +129,7 @@ type PaymentRequest {
 
 type PaymentItem {
     id: ID!
+    spexareId: ID
     year: Int!
     lifetime: Boolean!
     status: String!

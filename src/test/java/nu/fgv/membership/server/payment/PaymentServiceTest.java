@@ -414,4 +414,120 @@ class PaymentServiceTest {
         assertThat(service.remind()).isZero();
         verify(mails, never()).reminder(any(), any());
     }
+
+    private FeeLevel familyFee(final int year, final int amount) {
+        final FeeLevel level = new FeeLevel("FGV", year, FeeKind.FAMILY, "Familj", "Family", amount, clock.instant());
+
+        feeLevels.put(level.getId(), level);
+        when(fees.findById(level.getId())).thenReturn(Optional.of(level));
+        return level;
+    }
+
+    @Test
+    void oneFamilyFeePaysForTheWholeFamily() {
+        final FeeLevel family = familyFee(2026, 350);
+        final PaymentView view = service.request(SPEXARE, USER, List.of(family.getId()), "Maken Gösta och barnen Lisa och Pelle", List.of("sp-b", "sp-c"));
+
+        assertThat(view.amount()).isEqualTo(350);
+        assertThat(view.family()).isTrue();
+        assertThat(view.familyIncomplete()).isFalse();
+        assertThat(view.familyNote()).isEqualTo("Maken Gösta och barnen Lisa och Pelle");
+        assertThat(view.memberships()).extracting(PaymentView.Item::spexareId).containsExactlyInAnyOrder(SPEXARE, "sp-b", "sp-c");
+        assertThat(view.memberships()).extracting(PaymentView.Item::status).containsOnly("PENDING");
+        assertThat(memberships.values()).extracting(Membership::getFamilyId).doesNotContainNull().containsOnly(memberships.values().iterator().next().getFamilyId());
+    }
+
+    @Test
+    void thePayerAloneIsAFamilyRequestThatTheBoardCompletes() {
+        final FeeLevel family = familyFee(2026, 350);
+        final PaymentView view = service.request(USER, List.of(family.getId()));
+
+        assertThat(view.family()).isTrue();
+        assertThat(view.familyIncomplete()).isTrue();
+    }
+
+    @Test
+    void payingMakesEveryFamilyMemberAMember() {
+        final FeeLevel family = familyFee(2026, 350);
+        final PaymentView made = service.request(SPEXARE, USER, List.of(family.getId()), null, List.of("sp-b", "sp-c"));
+        final PaymentView paidView = service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 350, PaymentHow.SWISH, null);
+
+        assertThat(paidView.status()).isEqualTo(PaymentStatus.MATCHED);
+        assertThat(paidView.memberships()).hasSize(3).extracting(PaymentView.Item::status).containsOnly("PAID");
+    }
+
+    @Test
+    void theBoardCanAttachFamilyMembersLaterAndTheyGetTheStateOfThePayer() {
+        final FeeLevel family = familyFee(2026, 350);
+        final PaymentView made = service.request(USER, List.of(family.getId()));
+
+        service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 350, PaymentHow.SWISH, "Swish");
+
+        final PaymentView completed = service.addFamilyMembers(made.id(), List.of("sp-b", SPEXARE, "sp-b"));
+
+        assertThat(completed.memberships()).hasSize(2);
+        assertThat(completed.familyIncomplete()).isFalse();
+        assertThat(completed.memberships()).extracting(PaymentView.Item::status).containsOnly("PAID");
+    }
+
+    @Test
+    void anotherRequestCannotBeCompletedAsAFamily() {
+        final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
+
+        assertThatThrownBy(() -> service.addFamilyMembers(made.id(), List.of("sp-b"))).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void aFamilyMemberWhoIsAMemberAlreadyIsRefused() {
+        final FeeLevel family = familyFee(2026, 350);
+        final Membership paid = new Membership("sp-b", "FGV", 2026, clock.instant());
+
+        paid.update(false, MembershipStatus.PAID, MembershipHow.SWISH, null, clock.instant());
+        when(membershipRepository.findBySpexareId("sp-b")).thenReturn(List.of(paid));
+
+        assertThatThrownBy(() -> service.request(SPEXARE, USER, List.of(family.getId()), null, List.of("sp-b"))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aFamilyCannotBeLargerThanTen() {
+        final FeeLevel family = familyFee(2026, 350);
+        final List<String> many = java.util.stream.IntStream.range(0, 10).mapToObj(i -> "sp-" + i).toList();
+
+        assertThatThrownBy(() -> service.request(SPEXARE, USER, List.of(family.getId()), null, many)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.request(SPEXARE, USER, List.of(family.getId()), null, many.subList(0, 9)).memberships()).hasSize(10);
+    }
+
+    @Test
+    void standardAndFamilyFeeCannotBothBePaidForTheSameYear() {
+        final FeeLevel family = familyFee(2026, 350);
+
+        assertThatThrownBy(() -> service.request(USER, List.of(ordinary2026.getId(), family.getId()))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void undoingAFamilyPaymentTakesTheMembershipFromEveryone() {
+        final FeeLevel family = familyFee(2026, 350);
+        final PaymentView made = service.request(SPEXARE, USER, List.of(family.getId()), null, List.of("sp-b"));
+
+        service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 350, PaymentHow.SWISH, null);
+
+        final Payment payment = paid.getFirst();
+
+        when(payments.findById(payment.getId())).thenReturn(Optional.of(payment));
+        org.mockito.Mockito.doAnswer(call -> paid.remove(call.<Payment>getArgument(0))).when(payments).delete(any(Payment.class));
+        when(requests.findById(payment.getRequestPk())).thenReturn(Optional.of(stored.get(made.id())));
+
+        assertThat(service.undoPayment(payment.getId()).memberships()).extracting(PaymentView.Item::status).containsOnly("PENDING");
+    }
+
+    @Test
+    void aLifeFeeCanStartInALaterYearAndIsNotOfferedBefore() {
+        final FeeService feeService = new FeeService(fees, clock);
+        final FeeLevel later = new FeeLevel("FGV", 2028, FeeKind.LIFETIME, "Livstid 2028", "Life 2028", 3000, clock.instant());
+
+        when(fees.findByRetiredFalseOrderByAmountDesc()).thenReturn(List.of(later, life, ordinary2026));
+
+        assertThat(feeService.available(null)).containsExactly(life, ordinary2026);
+        assertThat(feeService.available(2026)).containsExactly(life, ordinary2026);
+    }
 }

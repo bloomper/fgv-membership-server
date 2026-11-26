@@ -53,8 +53,8 @@ public class RevivalGraphqlApi {
 
     @QueryMapping
     public List<PaymentGraphqlApi.FeeLevelView> revivalFeeLevels(@Argument final Integer year) {
-        return fees.available(year).stream().filter(level -> !level.isLifetime())
-                .map(level -> new PaymentGraphqlApi.FeeLevelView(level.getId(), level.getYear(), false, level.getNameSv(), level.getNameEn(), level.getAmount(), false)).toList();
+        return fees.available(year).stream().filter(level -> level.getKind() == FeeKind.STANDARD)
+                .map(level -> new PaymentGraphqlApi.FeeLevelView(level.getId(), level.getYear(), FeeKind.STANDARD, false, level.getNameSv(), level.getNameEn(), level.getAmount(), false)).toList();
     }
 
     @MutationMapping

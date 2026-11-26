@@ -52,6 +52,10 @@ public class FeeLevel {
     @Column(nullable = false)
     private boolean lifetime;
 
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private FeeKind kind = FeeKind.STANDARD;
+
     @Column(name = "name_sv", nullable = false, length = 100)
     private String nameSv;
 
@@ -72,20 +76,33 @@ public class FeeLevel {
 
     public FeeLevel(final String type, final Integer year, final boolean lifetime, final String nameSv, final String nameEn,
                     final int amount, final Instant now) {
+        this(type, year, lifetime ? FeeKind.LIFETIME : FeeKind.STANDARD, nameSv, nameEn, amount, now);
+    }
+
+    public FeeLevel(final String type, final Integer year, final FeeKind kind, final String nameSv, final String nameEn,
+                    final int amount, final Instant now) {
         this.type = type;
         this.createdAt = now;
-        update(year, lifetime, nameSv, nameEn, amount);
+        update(year, kind, nameSv, nameEn, amount);
     }
 
     public final void update(final Integer year, final boolean lifetime, final String nameSv, final String nameEn, final int amount) {
+        update(year, lifetime ? FeeKind.LIFETIME : FeeKind.STANDARD, nameSv, nameEn, amount);
+    }
+
+    /**
+     * @param year for a yearly fee the year it is for; for a life fee, optionally the first year it is offered
+     */
+    public final void update(final Integer year, final FeeKind kind, final String nameSv, final String nameEn, final int amount) {
         if (amount < 0) {
             throw new IllegalArgumentException("The amount cannot be negative");
         }
-        if (!lifetime && year == null) {
+        if (kind != FeeKind.LIFETIME && year == null) {
             throw new IllegalArgumentException("A yearly fee needs a year");
         }
-        this.year = lifetime ? null : year;
-        this.lifetime = lifetime;
+        this.year = year;
+        this.kind = kind;
+        this.lifetime = kind == FeeKind.LIFETIME;
         this.nameSv = nameSv;
         this.nameEn = nameEn;
         this.amount = amount;
@@ -105,6 +122,14 @@ public class FeeLevel {
 
     public Integer getYear() {
         return year;
+    }
+
+    public FeeKind getKind() {
+        return kind;
+    }
+
+    public boolean isFamily() {
+        return kind == FeeKind.FAMILY;
     }
 
     public boolean isLifetime() {

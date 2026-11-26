@@ -71,6 +71,9 @@ public class Membership {
     @Column(length = 500)
     private String note;
 
+    @Column(name = "family_id", length = 36)
+    private String familyId;
+
     @Column(name = "spexare_deleted", nullable = false)
     private boolean spexareDeleted;
 
@@ -108,6 +111,14 @@ public class Membership {
     public void markSpexareDeleted(final Instant now) {
         this.spexareDeleted = true;
         this.updatedAt = now;
+    }
+
+    public void setFamilyId(final String familyId) {
+        this.familyId = familyId;
+    }
+
+    public String getFamilyId() {
+        return familyId;
     }
 
     public Long getPk() {

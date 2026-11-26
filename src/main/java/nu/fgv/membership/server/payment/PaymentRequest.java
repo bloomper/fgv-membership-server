@@ -59,6 +59,12 @@ public class PaymentRequest {
     @Column(name = "payer_label", length = 200)
     private String payerLabel;
 
+    @Column(name = "family_id", length = 36)
+    private String familyId;
+
+    @Column(name = "family_note", length = 500)
+    private String familyNote;
+
     @Column(nullable = false)
     private int amount;
 
@@ -108,6 +114,22 @@ public class PaymentRequest {
 
         request.payerLabel = payerLabel;
         return request;
+    }
+
+    /**
+     * A family membership: the memberships of the family share this id, and the note says who the payer said they are.
+     */
+    public void family(final String familyId, final String note) {
+        this.familyId = familyId;
+        this.familyNote = note;
+    }
+
+    public String getFamilyId() {
+        return familyId;
+    }
+
+    public String getFamilyNote() {
+        return familyNote;
     }
 
     public boolean isForRevival() {
