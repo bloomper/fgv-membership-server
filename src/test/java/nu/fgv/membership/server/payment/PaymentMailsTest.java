@@ -39,7 +39,7 @@ import static org.mockito.Mockito.verify;
 
 class PaymentMailsTest {
 
-    private final PaymentProperties properties = new PaymentProperties("123", "456", "FGV", "http://qr", Duration.ofDays(3), "FGV");
+    private final PaymentSettings properties = PaymentSettings.fixed(new PaymentProperties("123", "456", "FGV", "http://qr", Duration.ofDays(3), "FGV"), List.of());
     private final JavaMailSender sender = mock(JavaMailSender.class);
 
     private PaymentMails mails(final String... recipients) {
@@ -52,7 +52,7 @@ class PaymentMailsTest {
         final MembershipProperties membership = new MembershipProperties("https://medlem.example", null, null, null,
                 new MembershipProperties.Mail("noreply@fgv.nu"), List.of(), null);
 
-        return new PaymentMails(new Mailer(sender, messages, membership), properties, "https://medlem.example", List.of(recipients));
+        return new PaymentMails(new Mailer(sender, messages, membership), PaymentSettings.fixed(new PaymentProperties("123", "456", "FGV", "http://qr", Duration.ofDays(3), "FGV"), List.of(recipients)), "https://medlem.example");
     }
 
     private List<SimpleMailMessage> sent(final int times) {

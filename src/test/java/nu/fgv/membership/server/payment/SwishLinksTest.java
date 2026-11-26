@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SwishLinksTest {
 
     private static SwishLinks links(final String number) {
-        return new SwishLinks(RestClient.create(), new PaymentProperties(number, "", "FGV", "http://localhost:1/qr", Duration.ofDays(3), "FGV"));
+        return new SwishLinks(RestClient.create(), PaymentSettings.fixed(new PaymentProperties(number, "", "FGV", "http://localhost:1/qr", Duration.ofDays(3), "FGV"), java.util.List.of()));
     }
 
     @Test

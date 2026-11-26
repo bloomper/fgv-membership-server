@@ -46,6 +46,14 @@ public interface SpexregisterClient {
     List<Spexare> search(String query);
 
     /**
+     * Links a user's account to a spexare. Spexregister knows the account once the user has been seen there, which its
+     * sync of Keycloak's users does every few minutes.
+     *
+     * @throws IllegalStateException when it cannot be done, with Spexregister's reason
+     */
+    void link(String userId, String spexareId);
+
+    /**
      * Creates a spexare for someone who is not in the register yet, e.g. a new member who paid online. Spexregister links
      * the spexare to the user's account by email.
      */

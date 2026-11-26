@@ -151,7 +151,7 @@ public class BankService {
     public List<Suggestion> suggestions(final String transactionId) {
         final BankTransaction transaction = find(transactionId);
         final List<PaymentRequest> payable = requests.findByStatusInOrderByCreatedAtAsc(List.of(PaymentStatus.OPEN, PaymentStatus.REPORTED));
-        final Map<String, Spexare> people = spexregister.byIds(payable.stream().map(PaymentRequest::getSpexareId).distinct().toList()).stream()
+        final Map<String, Spexare> people = spexregister.byIds(payable.stream().map(PaymentRequest::getSpexareId).filter(java.util.Objects::nonNull).distinct().toList()).stream()
                 .collect(Collectors.toMap(Spexare::id, Function.identity()));
         final List<Suggestion> found = new ArrayList<>();
         final String reference = transaction.getText() == null ? null : ReferenceFinder.invalid(transaction.getText()).stream().findFirst().orElse(null);
@@ -159,16 +159,16 @@ public class BankService {
 
         for (final PaymentRequest request : payable) {
             final Spexare person = people.get(request.getSpexareId());
-            final double byName = Math.max(person == null ? 0 : NameMatcher.similarity(who, person.name()),
+            final double byName = Math.max(request.isForRevival() ? NameMatcher.similarity(who, request.getPayerLabel()) : person == null ? 0 : NameMatcher.similarity(who, person.name()),
                     request.getPaidBy() == null ? 0 : NameMatcher.similarity(who, request.getPaidBy()));
             final boolean sameAmount = remaining(request) == transaction.kronor();
             final boolean nearReference = reference != null && !ReferenceFinder.nearest(reference, List.of(request.getReference())).isEmpty();
 
             if (nearReference) {
-                found.add(new Suggestion(request.getId(), request.getReference(), person == null ? null : person.name(), request.getAmount(),
+                found.add(new Suggestion(request.getId(), request.getReference(), request.isForRevival() ? request.getPayerLabel() : person == null ? null : person.name(), request.getAmount(),
                         request.getStatus(), "REFERENCE", 2));
             } else if (sameAmount && byName >= NAME_THRESHOLD) {
-                found.add(new Suggestion(request.getId(), request.getReference(), person == null ? null : person.name(), request.getAmount(),
+                found.add(new Suggestion(request.getId(), request.getReference(), request.isForRevival() ? request.getPayerLabel() : person == null ? null : person.name(), request.getAmount(),
                         request.getStatus(), "NAME", byName + (request.getStatus() == PaymentStatus.REPORTED ? 0.5 : 0)));
             }
         }

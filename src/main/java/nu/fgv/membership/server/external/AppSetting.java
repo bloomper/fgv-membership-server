@@ -46,6 +46,10 @@ public class AppSetting {
         this.value = value;
     }
 
+    public void setValue(final String value) {
+        this.value = value;
+    }
+
     public String getName() {
         return name;
     }

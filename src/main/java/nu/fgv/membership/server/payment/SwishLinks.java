@@ -38,9 +38,9 @@ import java.util.Map;
 public class SwishLinks {
 
     private final RestClient client;
-    private final PaymentProperties properties;
+    private final PaymentSettings properties;
 
-    public SwishLinks(@Qualifier("plainRestClient") final RestClient client, final PaymentProperties properties) {
+    public SwishLinks(@Qualifier("plainRestClient") final RestClient client, final PaymentSettings properties) {
         this.client = client;
         this.properties = properties;
     }

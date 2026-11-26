@@ -53,8 +53,11 @@ public class PaymentRequest {
     @Column(nullable = false, length = 12, unique = true)
     private String reference;
 
-    @Column(name = "spexare_id", nullable = false, length = 36)
+    @Column(name = "spexare_id", length = 36)
     private String spexareId;
+
+    @Column(name = "payer_label", length = 200)
+    private String payerLabel;
 
     @Column(nullable = false)
     private int amount;
@@ -94,6 +97,25 @@ public class PaymentRequest {
         this.createdBy = createdBy;
         this.membershipIds = new LinkedHashSet<>(membershipIds);
         this.createdAt = now;
+    }
+
+    /**
+     * A request that a revival pays for several participants: it has no single spexare, and the revival is its payer.
+     */
+    public static PaymentRequest forRevival(final String reference, final String payerLabel, final int amount, final String createdBy,
+                                            final Set<String> membershipIds, final Instant now) {
+        final PaymentRequest request = new PaymentRequest(reference, null, amount, createdBy, membershipIds, now);
+
+        request.payerLabel = payerLabel;
+        return request;
+    }
+
+    public boolean isForRevival() {
+        return payerLabel != null;
+    }
+
+    public String getPayerLabel() {
+        return payerLabel;
     }
 
     public void report(final String paidBy, final Instant now) {

@@ -16,7 +16,7 @@
 
 package nu.fgv.membership.server.board;
 
-import nu.fgv.membership.server.payment.PaymentProperties;
+import nu.fgv.membership.server.payment.PaymentSettings;
 import nu.fgv.membership.server.payment.PaymentRequest;
 import nu.fgv.membership.server.payment.PaymentRequestRepository;
 import nu.fgv.membership.server.payment.PaymentService;
@@ -61,14 +61,14 @@ public class PersonalLinkService {
     private final PersonalLinkRepository links;
     private final PaymentRequestRepository requests;
     private final PaymentService payments;
-    private final PaymentProperties properties;
+    private final PaymentSettings properties;
     private final SwishLinks swish;
     private final OptOutRepository optOuts;
     private final Clock clock;
 
     @SuppressWarnings("java:S107")
     public PersonalLinkService(final PersonalLinkRepository links, final PaymentRequestRepository requests, final PaymentService payments,
-                               final PaymentProperties properties, final SwishLinks swish, final OptOutRepository optOuts, final Clock clock) {
+                               final PaymentSettings properties, final SwishLinks swish, final OptOutRepository optOuts, final Clock clock) {
         this.links = links;
         this.requests = requests;
         this.payments = payments;

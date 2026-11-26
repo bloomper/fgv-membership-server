@@ -49,9 +49,11 @@ public class PaymentGraphqlApi {
     private final FeeService fees;
     private final MembershipRepository memberships;
     private final SwishLinks swish;
+    private final nu.fgv.membership.server.board.AuditService audit;
 
     public PaymentGraphqlApi(final PaymentService payments, final FeeService fees, final MembershipRepository memberships,
-                             final SwishLinks swish) {
+                             final SwishLinks swish, final nu.fgv.membership.server.board.AuditService audit) {
+        this.audit = audit;
         this.payments = payments;
         this.fees = fees;
         this.memberships = memberships;
@@ -143,14 +145,20 @@ public class PaymentGraphqlApi {
     public PaymentView recordPayment(@AuthenticationPrincipal final Jwt caller, @Argument final String requestId,
                                      @Argument final String paidOn, @Argument final int amount, @Argument final PaymentHow how,
                                      @Argument final String note) {
-        return payments.recordPayment(caller.getSubject(), requestId, LocalDate.parse(paidOn), amount, how,
+        final PaymentView view = payments.recordPayment(caller.getSubject(), requestId, LocalDate.parse(paidOn), amount, how,
                 note == null || note.isBlank() ? null : note.strip());
+
+        audit.log(caller.getSubject(), "PAYMENT_RECORDED", view.reference(), "%d kr %s".formatted(amount, how));
+        return view;
     }
 
     @MutationMapping
     @PreAuthorize(TREASURER)
-    public PaymentView cancelPaymentRequest(@Argument final String id) {
-        return payments.cancel(id);
+    public PaymentView cancelPaymentRequest(@AuthenticationPrincipal final Jwt caller, @Argument final String id) {
+        final PaymentView view = payments.cancel(id);
+
+        audit.log(caller.getSubject(), "REQUEST_CANCELLED", view.reference(), null);
+        return view;
     }
 
     // Admin
@@ -163,13 +171,18 @@ public class PaymentGraphqlApi {
 
     @MutationMapping
     @PreAuthorize(ADMIN)
-    public FeeLevelView feeLevelSave(@Argument final FeeLevelInput input) {
-        return view(fees.save(input.id(), input.year(), input.lifetime(), input.nameSv(), input.nameEn(), input.amount()));
+    public FeeLevelView feeLevelSave(@AuthenticationPrincipal final Jwt caller, @Argument final FeeLevelInput input) {
+        final FeeLevelView saved = view(fees.save(input.id(), input.year(), input.lifetime(), input.nameSv(), input.nameEn(), input.amount()));
+
+        audit.log(caller.getSubject(), input.id() == null ? "FEE_ADDED" : "FEE_CHANGED", saved.id(), "%s %s: %d kr".formatted(
+                saved.lifetime() ? "life" : String.valueOf(saved.year()), saved.nameEn(), saved.amount()));
+        return saved;
     }
 
     @MutationMapping
     @PreAuthorize(ADMIN)
-    public FeeLevelView feeLevelRetire(@Argument final String id, @Argument final boolean retired) {
+    public FeeLevelView feeLevelRetire(@AuthenticationPrincipal final Jwt caller, @Argument final String id, @Argument final boolean retired) {
+        audit.log(caller.getSubject(), retired ? "FEE_RETIRED" : "FEE_RESTORED", id, null);
         return view(fees.retire(id, retired));
     }
 

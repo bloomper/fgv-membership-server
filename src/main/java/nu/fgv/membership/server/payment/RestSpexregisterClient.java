@@ -60,6 +60,21 @@ public class RestSpexregisterClient implements SpexregisterClient {
     }
 
     @Override
+    public void link(final String userId, final String spexareId) {
+        final ClientGraphQlResponse response;
+
+        try {
+            response = client.document("mutation($u: ID!, $s: ID!) { medlemskapLinkUser(userId: $u, spexareId: $s) { id } }")
+                    .variable("u", userId).variable("s", spexareId).executeSync();
+        } catch (final RuntimeException e) {
+            throw new IllegalStateException("Spexregister could not be reached: " + e.getMessage(), e);
+        }
+        if (!response.isValid() || !response.getErrors().isEmpty()) {
+            throw new IllegalStateException("Spexregister would not link the account: " + response.getErrors().stream().map(error -> error.getMessage()).findFirst().orElse("?"));
+        }
+    }
+
+    @Override
     public List<Spexare> search(final String query) {
         return execute("query($q: String!) { medlemskapSpexareSearch(q: $q, first: 25) { id firstName lastName email } }", "q", query)
                 .field("medlemskapSpexareSearch").toEntityList(Spexare.class);

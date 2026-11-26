@@ -17,6 +17,7 @@
 package nu.fgv.membership.server.board;
 
 import nu.fgv.membership.server.payment.PaymentProperties;
+import nu.fgv.membership.server.payment.PaymentSettings;
 import nu.fgv.membership.server.payment.PaymentRequest;
 import nu.fgv.membership.server.payment.PaymentRequestRepository;
 import nu.fgv.membership.server.payment.PaymentService;
@@ -50,7 +51,7 @@ class PersonalLinkServiceTest {
     private final PaymentService payments = mock(PaymentService.class);
     private final OptOutRepository optOuts = mock(OptOutRepository.class);
     private final List<PersonalLink> saved = new ArrayList<>();
-    private final PaymentProperties properties = new PaymentProperties("1234567890", "1234-5", "FGV", "http://localhost:1/qr", Duration.ofDays(3), "FGV");
+    private final PaymentSettings properties = PaymentSettings.fixed(new PaymentProperties("1234567890", "1234-5", "FGV", "http://localhost:1/qr", Duration.ofDays(3), "FGV"), List.of());
     private Clock clock = Clock.fixed(Instant.parse("2026-11-26T10:00:00Z"), ZoneOffset.UTC);
     private PaymentRequest request;
     private PersonalLinkService service;

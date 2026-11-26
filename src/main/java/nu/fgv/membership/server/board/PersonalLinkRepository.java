@@ -27,4 +27,6 @@ import java.util.Optional;
 public interface PersonalLinkRepository extends JpaRepository<PersonalLink, Long> {
 
     Optional<PersonalLink> findByTokenHash(String tokenHash);
+
+    long deleteByExpiresAtBefore(java.time.Instant before);
 }

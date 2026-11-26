@@ -58,9 +58,12 @@ public class RegistrationService {
     private final AccessMails accessMails;
     private final MembershipProperties properties;
     private final Clock clock;
+    private final nu.fgv.membership.server.payment.PaymentSettings settings;
 
     public RegistrationService(final KeycloakAdmin keycloak, final RegistrationRepository registrations, final Mailer mailer,
-                               final AccessMails accessMails, final MembershipProperties properties, final Clock clock) {
+                               final AccessMails accessMails, final MembershipProperties properties, final Clock clock,
+                               final nu.fgv.membership.server.payment.PaymentSettings settings) {
+        this.settings = settings;
         this.keycloak = keycloak;
         this.registrations = registrations;
         this.mailer = mailer;
@@ -139,8 +142,8 @@ public class RegistrationService {
         registration.markVerified();
         keycloak.setEmailVerified(user.get().id(), true);
         keycloak.sendSetPasswordEmail(user.get().id(), "fgv-membership", null, SET_PASSWORD_LIFESPAN);
-        if (!properties.registration().notifyRecipients().isEmpty()) {
-            accessMails.newUser(properties.registration().notifyRecipients(), user.get(), registration.getMessage(),
+        if (!settings.notifyRecipients().isEmpty()) {
+            accessMails.newUser(settings.notifyRecipients(), user.get(), registration.getMessage(),
                     properties.webUrl() + "/admin/users/" + user.get().id());
         }
         return true;

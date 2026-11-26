@@ -45,8 +45,11 @@ public class BankGraphqlApi {
     private final PaymentService payments;
     private final BankFormatRepository formats;
     private final Clock clock;
+    private final nu.fgv.membership.server.board.AuditService audit;
 
-    public BankGraphqlApi(final BankService bank, final PaymentService payments, final BankFormatRepository formats, final Clock clock) {
+    public BankGraphqlApi(final BankService bank, final PaymentService payments, final BankFormatRepository formats, final Clock clock,
+                          final nu.fgv.membership.server.board.AuditService audit) {
+        this.audit = audit;
         this.bank = bank;
         this.payments = payments;
         this.formats = formats;
@@ -93,32 +96,44 @@ public class BankGraphqlApi {
     @PreAuthorize(TREASURER)
     public BankService.ImportResult importStatement(@AuthenticationPrincipal final Jwt caller, @Argument final String formatId,
                                                     @Argument final String fileName, @Argument final String content) {
-        return bank.importStatement(caller.getSubject(), formatId, fileName, content);
+        final BankService.ImportResult result = bank.importStatement(caller.getSubject(), formatId, fileName, content);
+
+        if (result.errors().isEmpty()) {
+            audit.log(caller.getSubject(), "STATEMENT_IMPORTED", fileName, "%d new, %d matched at once".formatted(result.added(), result.matched()));
+        }
+        return result;
     }
 
     @MutationMapping
     @PreAuthorize(TREASURER)
     public TransactionView matchTransaction(@AuthenticationPrincipal final Jwt caller, @Argument final String id, @Argument final List<String> requestIds) {
-        return view(bank.match(caller.getSubject(), id, requestIds));
+        final TransactionView view = view(bank.match(caller.getSubject(), id, requestIds));
+
+        audit.log(caller.getSubject(), "TRANSACTION_MATCHED", id, requestIds.size() + " request(s)");
+        return view;
     }
 
     @MutationMapping
     @PreAuthorize(TREASURER)
-    public TransactionView dismissTransaction(@Argument final String id) {
+    public TransactionView dismissTransaction(@AuthenticationPrincipal final Jwt caller, @Argument final String id) {
+        audit.log(caller.getSubject(), "TRANSACTION_DISMISSED", id, null);
         return view(bank.dismiss(id));
     }
 
     @MutationMapping
     @PreAuthorize(TREASURER)
-    public boolean undoPayment(@Argument final String id) {
-        payments.undoPayment(id);
+    public boolean undoPayment(@AuthenticationPrincipal final Jwt caller, @Argument final String id) {
+        final var view = payments.undoPayment(id);
+
+        audit.log(caller.getSubject(), "PAYMENT_UNDONE", view.reference(), id);
         return true;
     }
 
     @MutationMapping
     @PreAuthorize(ADMIN)
     @Transactional
-    public FormatView bankFormatSave(@Argument final FormatInput input) {
+    public FormatView bankFormatSave(@AuthenticationPrincipal final Jwt caller, @Argument final FormatInput input) {
+        audit.log(caller.getSubject(), "BANK_FORMAT_SAVED", input.name(), null);
         final BankFormat format = input.id() == null ? new BankFormat(clock.instant()) : formats.findById(input.id())
                 .orElseThrow(() -> new IllegalArgumentException("Unknown format"));
 
@@ -130,7 +145,8 @@ public class BankGraphqlApi {
     @MutationMapping
     @PreAuthorize(ADMIN)
     @Transactional
-    public boolean bankFormatDelete(@Argument final String id) {
+    public boolean bankFormatDelete(@AuthenticationPrincipal final Jwt caller, @Argument final String id) {
+        audit.log(caller.getSubject(), "BANK_FORMAT_DELETED", id, null);
         formats.findById(id).ifPresent(formats::delete);
         return true;
     }

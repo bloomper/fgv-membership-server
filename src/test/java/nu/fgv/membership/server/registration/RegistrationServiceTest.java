@@ -63,7 +63,8 @@ class RegistrationServiceTest {
         messages.setBasename("messages");
         messages.setDefaultEncoding("UTF-8");
         messages.setFallbackToSystemLocale(false);
-        service = new RegistrationService(keycloak, repository, new Mailer(sender, messages, properties), accessMails, properties, clock);
+        service = new RegistrationService(keycloak, repository, new Mailer(sender, messages, properties), accessMails, properties, clock,
+                nu.fgv.membership.server.payment.PaymentSettings.fixed(new nu.fgv.membership.server.payment.PaymentProperties("", "", "FGV", "http://qr", java.time.Duration.ofDays(3), "FGV"), properties.registration().notifyRecipients()));
     }
 
     @Test

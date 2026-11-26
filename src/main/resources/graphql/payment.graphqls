@@ -85,8 +85,9 @@ type PaymentRequest {
     createdAt: String!
     reportedAt: String
     paidBy: String
-    spexareId: ID!
-    "Only for the treasurer's lists"
+    "Null for a request a revival pays for its participants"
+    spexareId: ID
+    "Only for the treasurer's lists; for a revival's request, who pays"
     spexareName: String
     "What has been paid so far, in whole kronor; less than amount leaves the request open"
     paid: Int!
@@ -109,4 +110,28 @@ type Payee {
     swishNumber: String
     bankAccount: String
     name: String!
+}
+
+extend type Query {
+    "REVIVAL. The yearly fees (not the life fee) for the year, or for every year."
+    revivalFeeLevels(year: Int): [FeeLevel!]!
+}
+
+extend type Mutation {
+    """
+    REVIVAL. One payment request that covers the FGV fee for these participants (spexare ids) for the fee's year. Those who
+    are members that year already are left out and listed. The revival pays the total with the reference; the treasurer
+    matches it, and the memberships become paid, with the revival as the payer.
+    """
+    createRevivalPaymentRequest(payerLabel: String!, spexareIds: [ID!]!, feeLevelId: ID!): RevivalPaymentRequest!
+}
+
+type RevivalPaymentRequest {
+    requestId: ID!
+    reference: String!
+    amount: Int!
+    "How many participants the request covers"
+    included: Int!
+    alreadyMembers: [ID!]!
+    payee: Payee!
 }

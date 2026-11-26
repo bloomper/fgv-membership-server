@@ -38,17 +38,14 @@ public class PaymentMails {
     private static final Locale LOCALE = Locale.of("sv");
 
     private final Mailer mailer;
-    private final PaymentProperties properties;
+    private final PaymentSettings properties;
     private final String webUrl;
-    private final java.util.List<String> adminRecipients;
 
-    public PaymentMails(final Mailer mailer, final PaymentProperties properties,
-                        @org.springframework.beans.factory.annotation.Value("${membership.web-url}") final String webUrl,
-                        @org.springframework.beans.factory.annotation.Value("${membership.registration.notify-recipients:}") final java.util.List<String> adminRecipients) {
+    public PaymentMails(final Mailer mailer, final PaymentSettings properties,
+                        @org.springframework.beans.factory.annotation.Value("${membership.web-url}") final String webUrl) {
         this.mailer = mailer;
         this.properties = properties;
         this.webUrl = webUrl;
-        this.adminRecipients = adminRecipients.stream().map(String::strip).filter(recipient -> !recipient.isEmpty()).toList();
     }
 
     /**
@@ -75,7 +72,7 @@ public class PaymentMails {
         final String key = event.name().toLowerCase(Locale.ROOT);
         final String extra = note == null || note.isBlank() ? "" : mailer.text(LOCALE, "mail.payment.admin.note", note);
 
-        for (final String recipient : adminRecipients) {
+        for (final String recipient : properties.notifyRecipients()) {
             try {
                 mailer.send(recipient, mailer.text(LOCALE, "mail.payment.admin." + key + ".subject", payer, amount),
                         mailer.text(LOCALE, "mail.payment.admin." + key + ".body", payer, amount, reference, years, extra, webUrl + "/treasurer/payments"));

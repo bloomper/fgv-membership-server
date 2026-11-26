@@ -57,13 +57,13 @@ public class PaymentService {
     private final MembershipRepository membershipRepository;
     private final SpexregisterClient spexregister;
     private final PaymentMails mails;
-    private final PaymentProperties properties;
+    private final PaymentSettings properties;
     private final Clock clock;
 
     @SuppressWarnings("java:S107")
     public PaymentService(final PaymentRequestRepository requests, final PaymentRepository payments, final FeeLevelRepository fees,
                           final MembershipService memberships, final MembershipRepository membershipRepository,
-                          final SpexregisterClient spexregister, final PaymentMails mails, final PaymentProperties properties,
+                          final SpexregisterClient spexregister, final PaymentMails mails, final PaymentSettings properties,
                           final Clock clock) {
         this.requests = requests;
         this.payments = payments;
@@ -182,7 +182,7 @@ public class PaymentService {
     public PaymentView report(final String userId, final String requestId, final String paidBy) {
         final PaymentRequest request = find(requestId);
 
-        if (!request.getSpexareId().equals(spexareOf(userId).id())) {
+        if (!ownedBy(request, userId)) {
             throw new AccessDeniedException("Not your payment request");
         }
         if (!request.isPayable()) {
@@ -229,12 +229,13 @@ public class PaymentService {
 
         if (covered) {
             request.matched();
-            request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.PAID, membershipHow(how), note));
+            request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.PAID,
+                    request.isForRevival() ? MembershipHow.REVIVAL : membershipHow(how), note));
         }
 
         final PaymentView view = view(request, null);
 
-        if (covered) {
+        if (covered && request.getSpexareId() != null) {
             spexregister.byIds(List.of(request.getSpexareId())).forEach(spexare -> mails.receipt(spexare, view));
         }
         return view;
@@ -298,13 +299,13 @@ public class PaymentService {
         found.forEach(payment -> byPk.computeIfAbsent(payment.getRequestPk(), pk -> requests.findById(pk).orElse(null)));
 
         final Map<String, Spexare> spexare = spexregister.byIds(byPk.values().stream().filter(java.util.Objects::nonNull)
-                .map(PaymentRequest::getSpexareId).distinct().toList()).stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
+                .map(PaymentRequest::getSpexareId).filter(java.util.Objects::nonNull).distinct().toList()).stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
 
         return found.stream().filter(payment -> byPk.get(payment.getRequestPk()) != null).map(payment -> {
             final PaymentRequest request = byPk.get(payment.getRequestPk());
 
-            return new PaymentLine(payment.getId(), request.getReference(), spexare.containsKey(request.getSpexareId())
-                    ? spexare.get(request.getSpexareId()).name() : null, payment.getPaidOn(), payment.getAmount(), payment.getHow(),
+            return new PaymentLine(payment.getId(), request.getReference(), request.isForRevival() ? request.getPayerLabel()
+                    : spexare.containsKey(request.getSpexareId()) ? spexare.get(request.getSpexareId()).name() : null, payment.getPaidOn(), payment.getAmount(), payment.getHow(),
                     payment.getNote(), payment.getTransactionPk() != null);
         }).toList();
     }
@@ -323,6 +324,10 @@ public class PaymentService {
         request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.REPORTED, null, null));
 
         final PaymentView view = view(request, null);
+        if (request.getSpexareId() == null) {
+            throw new IllegalStateException("A revival's request is paid by the revival, not reported");
+        }
+
         final String payer = spexregister.byIds(List.of(request.getSpexareId())).stream().findFirst().map(Spexare::name).orElse(request.getSpexareId());
 
         mails.adminNotice(PaymentMails.Event.REPORTED, payer, view.amount(), view.reference(), years(view),
@@ -372,7 +377,7 @@ public class PaymentService {
     @Transactional
     public int remind() {
         final var due = requests.findByStatusAndReminderSentAtIsNullAndCreatedAtBefore(PaymentStatus.OPEN,
-                clock.instant().minus(properties.reminderAfter()));
+                clock.instant().minus(properties.reminderAfter())).stream().filter(request -> request.getSpexareId() != null).toList();
 
         if (due.isEmpty()) {
             return 0;
@@ -418,10 +423,11 @@ public class PaymentService {
     public PaymentView get(final String userId, final String requestId, final boolean treasurer) {
         final PaymentRequest request = find(requestId);
 
-        if (!treasurer && !request.getSpexareId().equals(spexareOf(userId).id())) {
+        if (!treasurer && !ownedBy(request, userId)) {
             throw new AccessDeniedException("Not your payment request");
         }
-        return view(request, treasurer ? spexregister.byIds(List.of(request.getSpexareId())).stream().findFirst().orElse(null) : null);
+        return view(request, treasurer && request.getSpexareId() != null
+                ? spexregister.byIds(List.of(request.getSpexareId())).stream().findFirst().orElse(null) : null);
     }
 
     /**
@@ -430,7 +436,7 @@ public class PaymentService {
     @Transactional(readOnly = true)
     public List<PaymentView> waiting() {
         final var open = requests.findByStatusInOrderByCreatedAtAsc(List.of(PaymentStatus.OPEN, PaymentStatus.REPORTED));
-        final Map<String, Spexare> spexare = spexregister.byIds(open.stream().map(PaymentRequest::getSpexareId).distinct().toList())
+        final Map<String, Spexare> spexare = spexregister.byIds(open.stream().map(PaymentRequest::getSpexareId).filter(java.util.Objects::nonNull).distinct().toList())
                 .stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
 
         return open.stream().map(request -> view(request, spexare.get(request.getSpexareId()))).toList();
@@ -439,6 +445,59 @@ public class PaymentService {
     private static String years(final PaymentView view) {
         return view.memberships().stream().map(item -> item.lifetime() ? "livstid från " + item.year() : String.valueOf(item.year()))
                 .collect(Collectors.joining(", "));
+    }
+
+    private boolean ownedBy(final PaymentRequest request, final String userId) {
+        return request.getSpexareId() != null && request.getSpexareId().equals(spexareOf(userId).id());
+    }
+
+    /**
+     * @param request       the one request that pays for them all
+     * @param included      how many memberships it covers
+     * @param alreadyMembers the spexare who were members for the year already and are left out
+     */
+    public record RevivalRequest(PaymentView request, int included, List<String> alreadyMembers) {
+    }
+
+    /**
+     * A revival pays the year's fee for its participants (spec 5.7): one request for the lot, which the treasurer matches
+     * as usual, and the memberships become {@code PAID} with the revival as the payer. Participants who are members
+     * for the year already are left out and reported.
+     *
+     * @param payerLabel who pays, e.g. the revival's name and year
+     */
+    @Transactional
+    public RevivalRequest requestForRevival(final String actor, final String payerLabel, final List<String> spexareIds, final String feeLevelId) {
+        if (payerLabel == null || payerLabel.isBlank()) {
+            throw new IllegalArgumentException("Say who pays");
+        }
+
+        final FeeLevel level = fees.findById(feeLevelId).orElseThrow(() -> new IllegalArgumentException("Unknown fee"));
+
+        if (level.isLifetime() || level.getYear() == null || level.isRetired()) {
+            throw new IllegalArgumentException("Pick a yearly fee");
+        }
+
+        final int year = level.getYear();
+        final Set<String> membershipIds = new LinkedHashSet<>();
+        final List<String> already = new java.util.ArrayList<>();
+
+        for (final String spexareId : new LinkedHashSet<>(spexareIds)) {
+            if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(level.getType())
+                    && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
+                already.add(spexareId);
+            } else {
+                membershipIds.add(memberships.record(spexareId, level.getType(), year, false, MembershipStatus.PENDING, null, null).getId());
+            }
+        }
+        if (membershipIds.isEmpty()) {
+            throw new IllegalArgumentException("Everyone is a member for " + year + " already");
+        }
+
+        final PaymentRequest request = requests.save(PaymentRequest.forRevival(newReference(Year.now(clock.withZone(ZONE)).getValue()), payerLabel.strip(),
+                level.getAmount() * membershipIds.size(), actor, membershipIds, clock.instant()));
+
+        return new RevivalRequest(view(request, null), membershipIds.size(), already);
     }
 
     private PaymentRequest find(final String id) {
@@ -472,7 +531,8 @@ public class PaymentService {
                 .map(m -> new PaymentView.Item(m.getId(), m.getYear(), m.isLifetime(), m.getStatus().name())).toList();
 
         return new PaymentView(request.getId(), request.getReference(), request.getAmount(), request.getStatus(), request.getCreatedAt(),
-                request.getReportedAt(), request.getPaidBy(), request.getSpexareId(), spexare == null ? null : spexare.name(), items,
+                request.getReportedAt(), request.getPaidBy(), request.getSpexareId(),
+                spexare != null ? spexare.name() : request.getPayerLabel(), items,
                 new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request));
     }
 }

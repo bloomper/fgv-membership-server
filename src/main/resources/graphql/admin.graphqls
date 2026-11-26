@@ -1,0 +1,50 @@
+extend type Query {
+    "ADMIN. FGV's Swish number and bank account, the payee's name, how long an open request waits before the payer is reminded, and who is emailed about payments and new registrations."
+    settings: Settings!
+    "ADMIN. The maintenance jobs with when they last ran and what they did."
+    maintenanceJobs: [MaintenanceJob!]!
+    "ADMIN. Who changed what, newest first, including changes to users' access."
+    auditLog(first: Int = 0, max: Int = 50): [AuditLine!]!
+}
+
+extend type Mutation {
+    "ADMIN. Saves the settings; an empty value falls back to the configuration's."
+    saveSettings(input: SettingsInput!): Settings!
+    "ADMIN. Runs a job now."
+    runMaintenanceJob(name: String!): MaintenanceJob!
+}
+
+input SettingsInput {
+    swishNumber: String
+    bankAccount: String
+    payeeName: String
+    "1 to 60"
+    reminderDays: Int!
+    "Email addresses, separated by commas or lines"
+    recipients: String
+}
+
+type Settings {
+    swishNumber: String
+    bankAccount: String
+    payeeName: String
+    reminderDays: Int!
+    recipients: [String!]!
+}
+
+type MaintenanceJob {
+    name: String!
+    description: String!
+    lastRun: String
+    lastResult: String
+}
+
+type AuditLine {
+    at: String!
+    actor: String!
+    "From Keycloak; empty when the account is gone"
+    actorName: String
+    action: String!
+    subject: String
+    detail: String
+}

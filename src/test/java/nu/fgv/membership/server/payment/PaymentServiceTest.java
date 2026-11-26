@@ -63,8 +63,8 @@ class PaymentServiceTest {
     private final MembershipRepository membershipRepository = mock(MembershipRepository.class);
     private final SpexregisterClient spexregister = mock(SpexregisterClient.class);
     private final PaymentMails mails = mock(PaymentMails.class);
-    private final PaymentProperties properties = new PaymentProperties("123 456 78 90", "1234-5, 678 901 234-5", "FGV",
-            "http://qr.test", Duration.ofDays(3), "FGV");
+    private final PaymentSettings properties = PaymentSettings.fixed(new PaymentProperties("123 456 78 90", "1234-5, 678 901 234-5", "FGV",
+            "http://qr.test", Duration.ofDays(3), "FGV"), List.of());
     private final Spexare spexare = new Spexare(SPEXARE, "Greta", "Garbo", "greta@example.org");
 
     private PaymentService service;
@@ -340,5 +340,78 @@ class PaymentServiceTest {
 
         verify(mails).adminNotice(eq(PaymentMails.Event.ALREADY_MEMBER), eq("Greta Garbo"), eq(200), eq("Online: order-2"), eq("2026"), eq("Online: order-2"));
         verify(payments, never()).save(any());
+    }
+
+    @Test
+    void aRevivalPaysForSeveralParticipantsWithOneRequest() {
+        final var result = service.requestForRevival("revival-service", "Nyuppsättning 2027", List.of("sp-a", "sp-b", "sp-c"), ordinary2027.getId());
+
+        assertThat(result.included()).isEqualTo(3);
+        assertThat(result.request().amount()).isEqualTo(600);
+        assertThat(result.request().spexareId()).isNull();
+        assertThat(result.request().spexareName()).isEqualTo("Nyuppsättning 2027");
+        assertThat(PaymentReference.isValid(result.request().reference())).isTrue();
+        assertThat(memberships.values()).extracting(Membership::getSpexareId).containsExactlyInAnyOrder("sp-a", "sp-b", "sp-c");
+    }
+
+    @Test
+    void participantsWhoAreMembersAlreadyAreLeftOutAndReported() {
+        final Membership paid = new Membership("sp-b", "FGV", 2027, clock.instant());
+
+        paid.update(false, MembershipStatus.PAID, MembershipHow.SWISH, null, clock.instant());
+        memberships.put(paid.getId(), paid);
+        when(membershipRepository.findBySpexareId("sp-b")).thenReturn(List.of(paid));
+
+        final var result = service.requestForRevival("revival-service", "Nyuppsättning 2027", List.of("sp-a", "sp-b"), ordinary2027.getId());
+
+        assertThat(result.included()).isEqualTo(1);
+        assertThat(result.alreadyMembers()).containsExactly("sp-b");
+        assertThat(result.request().amount()).isEqualTo(200);
+    }
+
+    @Test
+    void aRevivalRequestWithNobodyToPayForIsRefused() {
+        final Membership paid = new Membership("sp-b", "FGV", 2027, clock.instant());
+
+        paid.update(false, MembershipStatus.WAIVED, MembershipHow.WAIVED, "honorary", clock.instant());
+        when(membershipRepository.findBySpexareId("sp-b")).thenReturn(List.of(paid));
+
+        assertThatThrownBy(() -> service.requestForRevival("revival-service", "Nyuppsättning", List.of("sp-b"), ordinary2027.getId()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.requestForRevival("revival-service", " ", List.of("sp-a"), ordinary2027.getId()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.requestForRevival("revival-service", "Nyuppsättning", List.of("sp-a"), life.getId()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void whenTheTreasurerRecordsTheRevivalsPaymentTheMembershipsArePaidByTheRevival() {
+        final var made = service.requestForRevival("revival-service", "Nyuppsättning 2027", List.of("sp-a", "sp-b"), ordinary2027.getId());
+        final PaymentView paidView = service.recordPayment("treasurer", made.request().id(), LocalDate.of(2026, 12, 1), 400, PaymentHow.BANK_TRANSFER, null);
+
+        assertThat(paidView.status()).isEqualTo(PaymentStatus.MATCHED);
+        assertThat(memberships.values()).allSatisfy(m -> {
+            assertThat(m.getStatus()).isEqualTo(MembershipStatus.PAID);
+            assertThat(m.getHow()).isEqualTo(MembershipHow.REVIVAL);
+        });
+        verify(mails, never()).receipt(any(), any());
+    }
+
+    @Test
+    void nobodyCanReportOrReadARevivalsRequestAsTheirOwn() {
+        final var made = service.requestForRevival("revival-service", "Nyuppsättning 2027", List.of("sp-a"), ordinary2027.getId());
+
+        assertThatThrownBy(() -> service.report(USER, made.request().id(), null)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.get(USER, made.request().id(), false)).isInstanceOf(AccessDeniedException.class);
+        assertThat(service.get(USER, made.request().id(), true).spexareName()).isEqualTo("Nyuppsättning 2027");
+    }
+
+    @Test
+    void revivalRequestsAreNotRemindedByEmail() {
+        service.requestForRevival("revival-service", "Nyuppsättning 2027", List.of("sp-a"), ordinary2027.getId());
+        when(requests.findByStatusAndReminderSentAtIsNullAndCreatedAtBefore(eq(PaymentStatus.OPEN), any())).thenReturn(List.copyOf(stored.values()));
+
+        assertThat(service.remind()).isZero();
+        verify(mails, never()).reminder(any(), any());
     }
 }

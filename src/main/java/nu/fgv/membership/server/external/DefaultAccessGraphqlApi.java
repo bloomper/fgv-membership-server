@@ -33,8 +33,10 @@ import java.util.List;
 public class DefaultAccessGraphqlApi {
 
     private final DefaultAccessService service;
+    private final nu.fgv.membership.server.board.AuditService audit;
 
-    public DefaultAccessGraphqlApi(final DefaultAccessService service) {
+    public DefaultAccessGraphqlApi(final DefaultAccessService service, final nu.fgv.membership.server.board.AuditService audit) {
+        this.audit = audit;
         this.service = service;
     }
 
@@ -44,7 +46,11 @@ public class DefaultAccessGraphqlApi {
     }
 
     @MutationMapping
-    public DefaultAccessService.Entry setDefaultAccess(@Argument final String clientId, @Argument final String role) {
-        return service.set(clientId, role);
+    public DefaultAccessService.Entry setDefaultAccess(@org.springframework.security.core.annotation.AuthenticationPrincipal final org.springframework.security.oauth2.jwt.Jwt caller,
+                                                       @Argument final String clientId, @Argument final String role) {
+        final DefaultAccessService.Entry entry = service.set(clientId, role);
+
+        audit.log(caller.getSubject(), "DEFAULT_ACCESS_SET", clientId, role);
+        return entry;
     }
 }

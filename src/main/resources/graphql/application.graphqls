@@ -1,0 +1,35 @@
+enum ApplicationStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+}
+
+extend type Query {
+    "USER. The caller's latest application, if any."
+    myApplication: Application
+    "BOARD. Applications that wait for an answer, oldest first."
+    membershipApplications: [Application!]!
+}
+
+extend type Mutation {
+    "USER. Applies for membership: who you are and how you have been part of the spex. For accounts not linked to a spexare, or that have never been a member."
+    applyForMembership(name: String!, text: String!): Application!
+    """
+    BOARD. Accepts: links the account to the spexare found in Spexregister (spexareId), or, without one, to a spexare created
+    there from the account's name and email address. The applicant is told by email and can pay.
+    """
+    acceptApplication(id: ID!, spexareId: ID): Application!
+    "BOARD. Rejects, with an optional message to the applicant."
+    rejectApplication(id: ID!, message: String): Application!
+}
+
+type Application {
+    id: ID!
+    applicantName: String!
+    "Only for the board"
+    applicantEmail: String
+    text: String!
+    status: ApplicationStatus!
+    createdAt: String!
+    decisionMessage: String
+}
