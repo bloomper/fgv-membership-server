@@ -106,3 +106,10 @@ membership:
   sync:
     # Told after each change to memberships (Spexregister's /api/sync/notify); empty relies on the consumers' pulls
     notify-urls: ${API_SYNC_NOTIFY_URLS:}
+  spexregister:
+    # Who the spexare are: read with the MEMBERSHIP role of fgv-membership-service
+    graphql-url: ${API_SPEXREGISTER_GRAPHQL_URL:http://spexregister-api:8080/api/graphql}
+  payment:
+    swish-number: ${API_PAYMENT_SWISH_NUMBER:}
+    bank-account: ${API_PAYMENT_BANK_ACCOUNT:}
+    payee-name: ${API_PAYMENT_PAYEE_NAME:FGV}

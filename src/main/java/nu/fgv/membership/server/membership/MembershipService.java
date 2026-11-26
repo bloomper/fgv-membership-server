@@ -71,6 +71,17 @@ public class MembershipService {
     }
 
     /**
+     * Moves a membership to another status, e.g. when its payment is reported or matched.
+     */
+    @Transactional
+    public Membership setStatus(final String id, final MembershipStatus status, final MembershipHow how, final String note) {
+        final Membership membership = memberships.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown membership " + id));
+
+        return record(membership.getSpexareId(), membership.getType(), membership.getYear(), membership.isLifetime(), status, how, note);
+    }
+
+    /**
      * Removes a membership altogether; a mistake, not a refund (that is {@code CANCELLED}).
      */
     @Transactional

@@ -1,0 +1,291 @@
+/*
+ * Copyright 2026 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package nu.fgv.membership.server.payment;
+
+import nu.fgv.membership.server.membership.Membership;
+import nu.fgv.membership.server.membership.MembershipHow;
+import nu.fgv.membership.server.membership.MembershipRepository;
+import nu.fgv.membership.server.membership.MembershipService;
+import nu.fgv.membership.server.membership.MembershipStatus;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.ZoneId;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * Paying for memberships: a request with a reference is made, the payer says they paid, and the treasurer records the
+ * payment, which makes the memberships count. Nothing is ever told by Swish, so recording is a person's decision.
+ *
+ * @author Anders Jacobsson
+ * @since 1.0
+ */
+@Service
+public class PaymentService {
+
+    private static final ZoneId ZONE = ZoneId.of("Europe/Stockholm");
+    private static final int MAX_REFERENCE_TRIES = 20;
+
+    private final PaymentRequestRepository requests;
+    private final PaymentRepository payments;
+    private final FeeLevelRepository fees;
+    private final MembershipService memberships;
+    private final MembershipRepository membershipRepository;
+    private final SpexregisterClient spexregister;
+    private final PaymentMails mails;
+    private final PaymentProperties properties;
+    private final Clock clock;
+
+    @SuppressWarnings("java:S107")
+    public PaymentService(final PaymentRequestRepository requests, final PaymentRepository payments, final FeeLevelRepository fees,
+                          final MembershipService memberships, final MembershipRepository membershipRepository,
+                          final SpexregisterClient spexregister, final PaymentMails mails, final PaymentProperties properties,
+                          final Clock clock) {
+        this.requests = requests;
+        this.payments = payments;
+        this.fees = fees;
+        this.memberships = memberships;
+        this.membershipRepository = membershipRepository;
+        this.spexregister = spexregister;
+        this.mails = mails;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    /**
+     * The spexare the user is linked to in Spexregister.
+     *
+     * @throws NoSpexareException when there is none; the user then applies for membership (spec 5.6)
+     */
+    public Spexare spexareOf(final String userId) {
+        return spexregister.forUser(userId).orElseThrow(NoSpexareException::new);
+    }
+
+    public static class NoSpexareException extends RuntimeException {
+        public NoSpexareException() {
+            super("Your account is not linked to a spexare");
+        }
+    }
+
+    /**
+     * Asks to pay the fee levels, each for a year or for life. The memberships are created as {@code PENDING}.
+     */
+    @Transactional
+    public PaymentView request(final String userId, final List<String> feeLevelIds) {
+        return request(spexareOf(userId).id(), userId, feeLevelIds);
+    }
+
+    /**
+     * @param spexareId whose memberships these are
+     * @param createdBy who asks: the user, or later the board
+     */
+    @Transactional
+    public PaymentView request(final String spexareId, final String createdBy, final List<String> feeLevelIds) {
+        if (feeLevelIds == null || feeLevelIds.isEmpty()) {
+            throw new IllegalArgumentException("Pick at least one fee");
+        }
+
+        final int thisYear = Year.now(clock.withZone(ZONE)).getValue();
+        final Set<String> membershipIds = new LinkedHashSet<>();
+        final Set<Integer> years = new LinkedHashSet<>();
+        int total = 0;
+        boolean lifetimeChosen = false;
+
+        for (final String id : new LinkedHashSet<>(feeLevelIds)) {
+            final FeeLevel level = fees.findById(id).orElseThrow(() -> new IllegalArgumentException("Unknown fee " + id));
+
+            if (level.isRetired()) {
+                throw new IllegalArgumentException("That fee is no longer offered");
+            }
+
+            final int year = level.isLifetime() ? thisYear : level.getYear();
+
+            if (level.isLifetime() ? lifetimeChosen : !years.add(year)) {
+                throw new IllegalArgumentException("Pick one fee for each year");
+            }
+            lifetimeChosen |= level.isLifetime();
+            if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(level.getType())
+                    && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
+                throw new IllegalArgumentException("Already a member for " + year);
+            }
+            membershipIds.add(memberships.record(spexareId, level.getType(), year, level.isLifetime(), MembershipStatus.PENDING, null, null).getId());
+            total += level.getAmount();
+        }
+
+        final PaymentRequest request = requests.save(new PaymentRequest(newReference(thisYear), spexareId, total, createdBy,
+                membershipIds, clock.instant()));
+
+        return view(request, null);
+    }
+
+    /**
+     * The payer says they paid, perhaps someone else on their behalf.
+     */
+    @Transactional
+    public PaymentView report(final String userId, final String requestId, final String paidBy) {
+        final PaymentRequest request = find(requestId);
+
+        if (!request.getSpexareId().equals(spexareOf(userId).id())) {
+            throw new AccessDeniedException("Not your payment request");
+        }
+        if (!request.isPayable()) {
+            throw new IllegalStateException("The request is " + request.getStatus());
+        }
+        request.report(paidBy == null || paidBy.isBlank() ? null : paidBy.strip(), clock.instant());
+        request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.REPORTED, null, null));
+        return view(request, null);
+    }
+
+    /**
+     * The treasurer records that the money arrived. The memberships become {@code PAID}, and the payer gets a receipt.
+     */
+    @Transactional
+    public PaymentView recordPayment(final String actor, final String requestId, final LocalDate paidOn, final int amount,
+                                     final PaymentHow how, final String note) {
+        final PaymentRequest request = find(requestId);
+
+        if (!request.isPayable()) {
+            throw new IllegalStateException("The request is " + request.getStatus());
+        }
+        if (amount < request.getAmount()) {
+            throw new IllegalArgumentException("The amount %d is less than the %d asked for".formatted(amount, request.getAmount()));
+        }
+        payments.save(new Payment(request.getPk(), paidOn, amount, how, actor, note, clock.instant()));
+        request.matched();
+        request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.PAID, membershipHow(how), note));
+
+        final PaymentView view = view(request, null);
+
+        spexregister.byIds(List.of(request.getSpexareId())).forEach(spexare -> mails.receipt(spexare, view));
+        return view;
+    }
+
+    /**
+     * The request is dropped; its memberships are cancelled unless they count.
+     */
+    @Transactional
+    public PaymentView cancel(final String requestId) {
+        final PaymentRequest request = find(requestId);
+
+        if (!request.isPayable()) {
+            throw new IllegalStateException("The request is " + request.getStatus());
+        }
+        request.cancel();
+        request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.CANCELLED, null, "Request cancelled"));
+        return view(request, null);
+    }
+
+    /**
+     * Reminds the payers of requests that nothing has happened to: sent once, when the request is older than the
+     * reminder time and neither reported nor matched.
+     *
+     * @return how many were reminded
+     */
+    @Transactional
+    public int remind() {
+        final var due = requests.findByStatusAndReminderSentAtIsNullAndCreatedAtBefore(PaymentStatus.OPEN,
+                clock.instant().minus(properties.reminderAfter()));
+
+        if (due.isEmpty()) {
+            return 0;
+        }
+
+        final Map<String, Spexare> spexare = spexregister.byIds(due.stream().map(PaymentRequest::getSpexareId).distinct().toList())
+                .stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
+
+        due.forEach(request -> {
+            request.reminded(clock.instant());
+            if (spexare.containsKey(request.getSpexareId())) {
+                mails.reminder(spexare.get(request.getSpexareId()), view(request, null));
+            }
+        });
+        return due.size();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentView> requestsOf(final String userId) {
+        return requests.findBySpexareIdOrderByCreatedAtDesc(spexareOf(userId).id()).stream().map(request -> view(request, null)).toList();
+    }
+
+    /**
+     * @param userId the caller's account; the request must be theirs unless they are the treasurer
+     */
+    @Transactional(readOnly = true)
+    public PaymentView get(final String userId, final String requestId, final boolean treasurer) {
+        final PaymentRequest request = find(requestId);
+
+        if (!treasurer && !request.getSpexareId().equals(spexareOf(userId).id())) {
+            throw new AccessDeniedException("Not your payment request");
+        }
+        return view(request, treasurer ? spexregister.byIds(List.of(request.getSpexareId())).stream().findFirst().orElse(null) : null);
+    }
+
+    /**
+     * The requests that wait for the treasurer: not yet paid, oldest first, with who they are for.
+     */
+    @Transactional(readOnly = true)
+    public List<PaymentView> waiting() {
+        final var open = requests.findByStatusInOrderByCreatedAtAsc(List.of(PaymentStatus.OPEN, PaymentStatus.REPORTED));
+        final Map<String, Spexare> spexare = spexregister.byIds(open.stream().map(PaymentRequest::getSpexareId).distinct().toList())
+                .stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
+
+        return open.stream().map(request -> view(request, spexare.get(request.getSpexareId()))).toList();
+    }
+
+    private PaymentRequest find(final String id) {
+        return requests.findById(id).orElseThrow(() -> new IllegalArgumentException("Unknown payment request " + id));
+    }
+
+    private String newReference(final int year) {
+        for (int i = 0; i < MAX_REFERENCE_TRIES; i++) {
+            final String reference = PaymentReference.generate(Year.of(year));
+
+            if (!requests.existsByReference(reference)) {
+                return reference;
+            }
+        }
+        throw new IllegalStateException("Could not make a free reference");
+    }
+
+    private static MembershipHow membershipHow(final PaymentHow how) {
+        return switch (how) {
+            case SWISH -> MembershipHow.SWISH;
+            case BANK_TRANSFER -> MembershipHow.BANK_TRANSFER;
+            case CASH -> MembershipHow.CASH;
+        };
+    }
+
+    private PaymentView view(final PaymentRequest request, final Spexare spexare) {
+        final List<PaymentView.Item> items = request.getMembershipIds().stream()
+                .map(id -> membershipRepository.findById(id).orElse(null)).filter(java.util.Objects::nonNull)
+                .sorted(java.util.Comparator.comparingInt(Membership::getYear))
+                .map(m -> new PaymentView.Item(m.getId(), m.getYear(), m.isLifetime(), m.getStatus().name())).toList();
+
+        return new PaymentView(request.getId(), request.getReference(), request.getAmount(), request.getStatus(), request.getCreatedAt(),
+                request.getReportedAt(), request.getPaidBy(), request.getSpexareId(), spexare == null ? null : spexare.name(), items,
+                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null);
+    }
+}

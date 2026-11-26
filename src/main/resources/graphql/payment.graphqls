@@ -1,0 +1,110 @@
+enum PaymentStatus {
+    "Not paid yet"
+    OPEN
+    "The payer says they paid; waits for the treasurer"
+    REPORTED
+    MATCHED
+    CANCELLED
+}
+
+enum PaymentHow {
+    SWISH
+    BANK_TRANSFER
+    CASH
+}
+
+extend type Query {
+    "USER. The caller's memberships and payment requests. linked is false when their account has no spexare."
+    myMembership: MyMembership!
+    "USER. Fees members may pick, highest first; for the year and for life, or only the year's and life."
+    feeLevels(year: Int): [FeeLevel!]!
+    "USER. A payment request, the caller's own, or anyone's for the treasurer."
+    paymentRequest(id: ID!): PaymentRequest!
+    "TREASURER. Requests that are open or reported, oldest first, with who they are for."
+    waitingPaymentRequests: [PaymentRequest!]!
+    "ADMIN. Every fee level, retired ones too."
+    allFeeLevels: [FeeLevel!]!
+}
+
+extend type Mutation {
+    "USER. Asks to pay these fee levels (one for each year, or the life fee). The memberships are created as pending."
+    requestPayment(feeLevelIds: [ID!]!): PaymentRequest!
+    "USER. Says that the request is paid, perhaps by someone else (paidBy)."
+    reportPaid(id: ID!, paidBy: String): PaymentRequest!
+    "TREASURER. The money arrived: the memberships become paid and the payer gets a receipt. paidOn is a date, yyyy-mm-dd."
+    recordPayment(requestId: ID!, paidOn: String!, amount: Int!, how: PaymentHow!, note: String): PaymentRequest!
+    "TREASURER. Drops an open or reported request and cancels its memberships."
+    cancelPaymentRequest(id: ID!): PaymentRequest!
+    "ADMIN. Creates a fee level, or changes one when id is given."
+    feeLevelSave(input: FeeLevelInput!): FeeLevel!
+    "ADMIN. Retired fee levels are not offered, and stay on what was paid."
+    feeLevelRetire(id: ID!, retired: Boolean!): FeeLevel!
+}
+
+input FeeLevelInput {
+    id: ID
+    "Null for the one-time life fee"
+    year: Int
+    lifetime: Boolean! = false
+    nameSv: String!
+    nameEn: String!
+    "Whole kronor"
+    amount: Int!
+}
+
+type FeeLevel {
+    id: ID!
+    year: Int
+    lifetime: Boolean!
+    nameSv: String!
+    nameEn: String!
+    amount: Int!
+    retired: Boolean!
+}
+
+type MyMembership {
+    linked: Boolean!
+    memberships: [MembershipItem!]!
+    requests: [PaymentRequest!]!
+}
+
+type MembershipItem {
+    id: ID!
+    type: String!
+    year: Int!
+    lifetime: Boolean!
+    "PENDING, REPORTED, PAID, WAIVED or CANCELLED"
+    status: String!
+}
+
+type PaymentRequest {
+    id: ID!
+    reference: String!
+    amount: Int!
+    status: PaymentStatus!
+    createdAt: String!
+    reportedAt: String
+    paidBy: String
+    spexareId: ID!
+    "Only for the treasurer's lists"
+    spexareName: String
+    memberships: [PaymentItem!]!
+    payee: Payee!
+    "Opens Swish with number, amount and reference filled in, on a phone. Null once paid or when there is no Swish number."
+    swishLink: String
+    "A QR code of the same, as a data: URI; null when Swish cannot be reached."
+    qr: String
+}
+
+type PaymentItem {
+    id: ID!
+    year: Int!
+    lifetime: Boolean!
+    status: String!
+}
+
+type Payee {
+    swishNumber: String
+    bankAccount: String
+    name: String!
+}
