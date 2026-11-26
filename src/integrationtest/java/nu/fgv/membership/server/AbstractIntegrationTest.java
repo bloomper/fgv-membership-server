@@ -317,12 +317,54 @@ public abstract class AbstractIntegrationTest {
         return List.of(MAIL.getReceivedMessages());
     }
 
+    /**
+     * Waits for a message that satisfies the condition: mail from an earlier test may still be on its way, so tests look
+     * for their own message instead of counting.
+     */
+    protected static MimeMessage mailWhere(final java.util.function.Predicate<MimeMessage> condition) {
+        final long until = System.currentTimeMillis() + 20_000;
+
+        while (System.currentTimeMillis() < until) {
+            for (final MimeMessage message : MAIL.getReceivedMessages()) {
+                if (condition.test(message)) {
+                    return message;
+                }
+            }
+            try {
+                Thread.sleep(100);
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new AssertionError("No such mail arrived; there were " + MAIL.getReceivedMessages().length);
+    }
+
+    protected static MimeMessage mailTo(final String address) {
+        return mailWhere(message -> recipients(message).stream().anyMatch(recipient -> recipient.contains(address)));
+    }
+
     protected static String body(final MimeMessage message) {
         try {
-            return String.valueOf(message.getContent());
+            return text(message.getContent());
         } catch (final Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * The text of a message, also when it has several parts (Keycloak sends plain text and HTML).
+     */
+    private static String text(final Object content) throws Exception {
+        if (content instanceof jakarta.mail.Multipart multipart) {
+            final StringBuilder text = new StringBuilder();
+
+            for (int i = 0; i < multipart.getCount(); i++) {
+                text.append(text(multipart.getBodyPart(i).getContent())).append('\n');
+            }
+            return text.toString();
+        }
+        return String.valueOf(content);
     }
 
     protected static String subject(final MimeMessage message) {

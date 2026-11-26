@@ -52,6 +52,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // Validation errors are answered by /error; without this a bad request looks like a missing login
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registration", "/api/registration/verify").permitAll()
                         .requestMatchers("/api/personal/**").permitAll()
                         .anyRequest().authenticated())
