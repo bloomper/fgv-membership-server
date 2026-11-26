@@ -74,6 +74,9 @@ public class Membership {
     @Column(name = "family_id", length = 36)
     private String familyId;
 
+    @Column(nullable = false)
+    private boolean support;
+
     @Column(name = "spexare_deleted", nullable = false)
     private boolean spexareDeleted;
 
@@ -111,6 +114,14 @@ public class Membership {
     public void markSpexareDeleted(final Instant now) {
         this.spexareDeleted = true;
         this.updatedAt = now;
+    }
+
+    public void setSupport(final boolean support) {
+        this.support = support;
+    }
+
+    public boolean isSupport() {
+        return support;
     }
 
     public void setFamilyId(final String familyId) {

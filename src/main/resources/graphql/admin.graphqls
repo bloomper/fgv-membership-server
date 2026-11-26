@@ -16,6 +16,9 @@ extend type Mutation {
 
 input SettingsInput {
     swishNumber: String
+    "FGV's bankgiro: members pay to it with the reference as the message"
+    bankgiro: String
+    "A bank account for direct transfers; may be left empty if it is not used"
     bankAccount: String
     payeeName: String
     "1 to 60"
@@ -26,6 +29,7 @@ input SettingsInput {
 
 type Settings {
     swishNumber: String
+    bankgiro: String
     bankAccount: String
     payeeName: String
     reminderDays: Int!

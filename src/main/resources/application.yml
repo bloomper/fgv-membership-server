@@ -111,6 +111,7 @@ membership:
     graphql-url: ${API_SPEXREGISTER_GRAPHQL_URL:http://spexregister-api:8080/api/graphql}
   payment:
     swish-number: ${API_PAYMENT_SWISH_NUMBER:}
+    bankgiro: ${API_PAYMENT_BANKGIRO:}
     bank-account: ${API_PAYMENT_BANK_ACCOUNT:}
     payee-name: ${API_PAYMENT_PAYEE_NAME:FGV}
   default-access:

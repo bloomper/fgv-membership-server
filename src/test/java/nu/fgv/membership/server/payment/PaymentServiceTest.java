@@ -530,4 +530,34 @@ class PaymentServiceTest {
         assertThat(feeService.available(null)).containsExactly(life, ordinary2026);
         assertThat(feeService.available(2026)).containsExactly(life, ordinary2026);
     }
+
+    @Test
+    void aSupportFeeMakesASupportMembershipForOnePerson() {
+        final FeeLevel support = new FeeLevel("FGV", 2026, FeeKind.SUPPORT, "Stöd", "Support", 100, clock.instant());
+
+        feeLevels.put(support.getId(), support);
+        when(fees.findById(support.getId())).thenReturn(Optional.of(support));
+
+        final PaymentView view = service.request(USER, List.of(support.getId()));
+
+        assertThat(view.amount()).isEqualTo(100);
+        assertThat(view.family()).isFalse();
+        assertThat(memberships.values()).singleElement().satisfies(m -> assertThat(m.isSupport()).isTrue());
+        assertThat(view.memberships()).hasSize(1);
+    }
+
+    @Test
+    void aStandardFeeIsNotASupportMembership() {
+        service.request(USER, List.of(ordinary2026.getId()));
+
+        assertThat(memberships.values()).singleElement().satisfies(m -> assertThat(m.isSupport()).isFalse());
+    }
+
+    @Test
+    void thePayeeShowsTheBankgiroAndTheBankAccountWhenTheyAreSet() {
+        final PaymentView view = service.request(USER, List.of(ordinary2026.getId()));
+
+        assertThat(view.payee().bankAccount()).isEqualTo("1234-5, 678 901 234-5");
+        assertThat(view.payee().bankgiro()).isEqualTo("");
+    }
 }

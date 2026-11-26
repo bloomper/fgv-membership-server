@@ -161,6 +161,7 @@ public class PaymentService {
             final Membership payer = memberships.record(spexareId, level.getType(), year, level.isLifetime(), MembershipStatus.PENDING, null, null);
 
             membershipIds.add(payer.getId());
+            payer.setSupport(level.isSupport());
             if (level.isFamily()) {
                 payer.setFamilyId(familyId);
                 for (final String other : others) {
@@ -243,6 +244,15 @@ public class PaymentService {
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
                                                          final int amount, final LocalDate paidOn, final String note) {
+        return recordExternal(actor, spexareId, year, lifetime, false, amount, paidOn, note);
+    }
+
+    /**
+     * @param support a support membership (stödmedlemskap)
+     */
+    @Transactional
+    public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
+                                                         final boolean support, final int amount, final LocalDate paidOn, final String note) {
         final String payer = spexregister.byIds(List.of(spexareId)).stream().findFirst().map(Spexare::name).orElse(spexareId);
 
         if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(properties.membershipType())
@@ -253,6 +263,9 @@ public class PaymentService {
 
         final Membership membership = memberships.record(spexareId, properties.membershipType(), year, lifetime, MembershipStatus.PAID,
                 MembershipHow.ONLINE, note);
+
+        membership.setSupport(support);
+
         final PaymentRequest request = new PaymentRequest(newReference(year), spexareId, amount, actor, Set.of(membership.getId()), clock.instant());
 
         request.matched();
@@ -632,7 +645,7 @@ public class PaymentService {
         return new PaymentView(request.getId(), request.getReference(), request.getAmount(), request.getStatus(), request.getCreatedAt(),
                 request.getReportedAt(), request.getPaidBy(), request.getSpexareId(),
                 spexare != null ? spexare.name() : request.getPayerLabel(), items,
-                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request),
+                new PaymentView.Payee(properties.swishNumber(), properties.bankgiro(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request),
                 request.getFamilyNote(), request.getFamilyId() != null,
                 request.getFamilyId() != null && items.stream().map(PaymentView.Item::spexareId).distinct().count() < 2);
     }

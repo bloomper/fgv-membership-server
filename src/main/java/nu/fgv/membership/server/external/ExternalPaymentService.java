@@ -92,6 +92,7 @@ public class ExternalPaymentService {
      */
     public Result record(final String actor, final ExternalPaymentRequest request) {
         final String email = validate(request);
+        final nu.fgv.membership.server.payment.FeeKind kind = kindOf(request);
         final Optional<ExternalPayment> earlier = externals.findByExternalRef(request.reference().strip());
 
         if (earlier.isPresent()) {
@@ -100,12 +101,12 @@ public class ExternalPaymentService {
 
         final Spexare spexare = spexregister.byEmail(email)
                 .orElseGet(() -> spexregister.create(request.firstName().strip(), request.lastName().strip(), email));
-        final boolean accountCreated = ensureAccount(actor, email, request);
+        final boolean accountCreated = ensureAccount(actor, email, request, kind.profile());
 
         return transaction.execute(_ -> {
-            final boolean lifetime = Boolean.TRUE.equals(request.lifetime());
+            final boolean lifetime = kind == nu.fgv.membership.server.payment.FeeKind.LIFETIME;
             final LocalDate paidOn = request.paidOn() == null ? LocalDate.now(clock.withZone(ZONE)) : request.paidOn();
-            final Optional<PaymentView> view = payments.recordExternal(actor, spexare.id(), request.year(), lifetime, request.amount(), paidOn,
+            final Optional<PaymentView> view = payments.recordExternal(actor, spexare.id(), request.year(), lifetime, kind == nu.fgv.membership.server.payment.FeeKind.SUPPORT, request.amount(), paidOn,
                     "Online: " + request.reference().strip());
             final Status status = view.isPresent() ? Status.RECORDED : Status.ALREADY_MEMBER;
 
@@ -119,7 +120,8 @@ public class ExternalPaymentService {
         });
     }
 
-    private boolean ensureAccount(final String actor, final String email, final ExternalPaymentRequest request) {
+    private boolean ensureAccount(final String actor, final String email, final ExternalPaymentRequest request,
+                                  final nu.fgv.membership.server.payment.AccessProfile profile) {
         if (keycloak.findUserByEmail(email).isPresent()) {
             return false;
         }
@@ -129,7 +131,7 @@ public class ExternalPaymentService {
         try {
             // The link below goes to this address, so choosing a password also proves it is theirs
             keycloak.setEmailVerified(id, true);
-            defaults.grant(actor, id);
+            defaults.grant(actor, id, profile);
             keycloak.sendSetPasswordEmail(id, "fgv-membership", null, SET_PASSWORD_LIFESPAN);
             mails.accountCreated(id, email);
         } catch (final RuntimeException e) {
@@ -138,6 +140,14 @@ public class ExternalPaymentService {
             throw e;
         }
         return true;
+    }
+
+    private static nu.fgv.membership.server.payment.FeeKind kindOf(final ExternalPaymentRequest request) {
+        if (request.kind() == nu.fgv.membership.server.payment.FeeKind.FAMILY) {
+            throw new IllegalArgumentException("A family membership is not sold in the shop");
+        }
+        return Boolean.TRUE.equals(request.lifetime()) ? nu.fgv.membership.server.payment.FeeKind.LIFETIME
+                : request.kind() == null ? nu.fgv.membership.server.payment.FeeKind.STANDARD : request.kind();
     }
 
     private String validate(final ExternalPaymentRequest request) {

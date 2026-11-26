@@ -41,16 +41,18 @@ public class DefaultAccessGraphqlApi {
     }
 
     @QueryMapping
-    public List<DefaultAccessService.Entry> defaultAccess() {
-        return service.all();
+    public List<DefaultAccessService.Entry> defaultAccess(@Argument final nu.fgv.membership.server.payment.AccessProfile profile) {
+        return service.all(profile == null ? nu.fgv.membership.server.payment.AccessProfile.MEMBER : profile);
     }
 
     @MutationMapping
     public DefaultAccessService.Entry setDefaultAccess(@org.springframework.security.core.annotation.AuthenticationPrincipal final org.springframework.security.oauth2.jwt.Jwt caller,
-                                                       @Argument final String clientId, @Argument final String role) {
-        final DefaultAccessService.Entry entry = service.set(clientId, role);
+                                                       @Argument final nu.fgv.membership.server.payment.AccessProfile profile, @Argument final String clientId,
+                                                       @Argument final String role) {
+        final nu.fgv.membership.server.payment.AccessProfile kind = profile == null ? nu.fgv.membership.server.payment.AccessProfile.MEMBER : profile;
+        final DefaultAccessService.Entry entry = service.set(kind, clientId, role);
 
-        audit.log(caller.getSubject(), "DEFAULT_ACCESS_SET", clientId, role);
+        audit.log(caller.getSubject(), "DEFAULT_ACCESS_SET", clientId, kind + ": " + role);
         return entry;
     }
 }

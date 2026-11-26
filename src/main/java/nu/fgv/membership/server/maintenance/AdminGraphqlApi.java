@@ -51,7 +51,7 @@ public class AdminGraphqlApi {
         this.audit = audit;
     }
 
-    public record SettingsInput(String swishNumber, String bankAccount, String payeeName, int reminderDays, String recipients) {
+    public record SettingsInput(String swishNumber, String bankgiro, String bankAccount, String payeeName, int reminderDays, String recipients) {
     }
 
     @QueryMapping
@@ -61,10 +61,10 @@ public class AdminGraphqlApi {
 
     @MutationMapping
     public PaymentSettings.Values saveSettings(@AuthenticationPrincipal final Jwt caller, @Argument final SettingsInput input) {
-        final PaymentSettings.Values saved = settings.save(input.swishNumber(), input.bankAccount(), input.payeeName(), input.reminderDays(), input.recipients());
+        final PaymentSettings.Values saved = settings.save(input.swishNumber(), input.bankgiro(), input.bankAccount(), input.payeeName(), input.reminderDays(), input.recipients());
 
-        audit.log(caller.getSubject(), "SETTINGS_SAVED", null, "Swish %s, bank account %s, remind after %d days, notify %s".formatted(
-                saved.swishNumber(), saved.bankAccount(), saved.reminderDays(), String.join(",", saved.recipients())));
+        audit.log(caller.getSubject(), "SETTINGS_SAVED", null, "Swish %s, bankgiro %s, bank account %s, remind after %d days, notify %s".formatted(
+                saved.swishNumber(), saved.bankgiro(), saved.bankAccount(), saved.reminderDays(), String.join(",", saved.recipients())));
         return saved;
     }
 

@@ -38,6 +38,8 @@ type Member {
     wasMemberLastYear: Boolean!
     "Part of a family membership"
     family: Boolean!
+    "A support membership (stödmedlemskap)"
+    support: Boolean!
 }
 
 type MemberCount {

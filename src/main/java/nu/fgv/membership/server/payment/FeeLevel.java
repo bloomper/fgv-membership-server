@@ -128,6 +128,10 @@ public class FeeLevel {
         return kind;
     }
 
+    public boolean isSupport() {
+        return kind == FeeKind.SUPPORT;
+    }
+
     public boolean isFamily() {
         return kind == FeeKind.FAMILY;
     }

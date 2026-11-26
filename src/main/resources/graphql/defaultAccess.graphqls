@@ -1,11 +1,18 @@
+enum AccessProfile {
+    "Standard, family and life memberships"
+    MEMBER
+    "Support memberships (stödmedlemskap)"
+    SUPPORT
+}
+
 extend type Query {
-    "ADMIN. The access a user gets when an account is created from a payment made elsewhere, for each application."
-    defaultAccess: [DefaultAccess!]!
+    "ADMIN. The access a user gets when an account is created from a payment made elsewhere, for each application, for the kind of membership (MEMBER by default)."
+    defaultAccess(profile: AccessProfile = MEMBER): [DefaultAccess!]!
 }
 
 extend type Mutation {
     "ADMIN. Sets the highest role new users get on an application (roles below it come with it); null gives none."
-    setDefaultAccess(clientId: String!, role: String): DefaultAccess!
+    setDefaultAccess(profile: AccessProfile = MEMBER, clientId: String!, role: String): DefaultAccess!
 }
 
 type DefaultAccess {

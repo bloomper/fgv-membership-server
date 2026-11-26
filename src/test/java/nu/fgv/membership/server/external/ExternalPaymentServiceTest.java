@@ -65,7 +65,7 @@ class ExternalPaymentServiceTest {
             .withClient("fgv-membership", "Medlemskap", "https://medlem.example")
             .withClient("fgv-spexregister", "Spexregister", "https://register.example")
             .withClient("fgv-revival", "Nyuppsättning", "https://revival.example");
-    private final Map<String, DefaultAccess> defaultRows = new HashMap<>();
+    private final Map<DefaultAccess.Key, DefaultAccess> defaultRows = new HashMap<>();
     private final Map<String, ExternalPayment> told = new HashMap<>();
     private final DefaultAccessRepository defaultRepository = mock(DefaultAccessRepository.class);
     private final AppSettingRepository settings = mock(AppSettingRepository.class);
@@ -87,15 +87,15 @@ class ExternalPaymentServiceTest {
         final ApplicationCatalog catalog = new ApplicationCatalog(properties, keycloak);
         final AccessService access = new AccessService(keycloak, catalog, mock(AccessChangeRepository.class), mock(AccessMails.class), properties);
 
-        when(defaultRepository.findAll()).thenAnswer(call -> List.copyOf(defaultRows.values()));
+        when(defaultRepository.findByProfile(any())).thenAnswer(call -> defaultRows.values().stream().filter(row -> row.getProfile() == call.getArgument(0)).toList());
         when(defaultRepository.save(any(DefaultAccess.class))).thenAnswer(call -> {
             final DefaultAccess row = call.getArgument(0);
 
-            defaultRows.put(row.getClientId(), row);
+            defaultRows.put(new DefaultAccess.Key(row.getProfile(), row.getClientId()), row);
             return row;
         });
-        when(defaultRepository.findById(anyString())).thenAnswer(call -> Optional.ofNullable(defaultRows.get(call.<String>getArgument(0))));
-        org.mockito.Mockito.doAnswer(call -> defaultRows.remove(call.<String>getArgument(0))).when(defaultRepository).deleteById(anyString());
+        when(defaultRepository.findById(any(DefaultAccess.Key.class))).thenAnswer(call -> Optional.ofNullable(defaultRows.get(call.<DefaultAccess.Key>getArgument(0))));
+        org.mockito.Mockito.doAnswer(call -> defaultRows.remove(call.<DefaultAccess.Key>getArgument(0))).when(defaultRepository).deleteById(any(DefaultAccess.Key.class));
         final Map<String, Boolean> seeded = new HashMap<>();
 
         when(settings.existsById(anyString())).thenAnswer(call -> seeded.containsKey(call.<String>getArgument(0)));
@@ -103,13 +103,13 @@ class ExternalPaymentServiceTest {
             seeded.put(call.<AppSetting>getArgument(0).getName(), true);
             return call.getArgument(0);
         });
-        defaults = new DefaultAccessService(defaultRepository, settings, catalog, access, properties, List.of("fgv-revival"));
+        defaults = new DefaultAccessService(defaultRepository, settings, catalog, access, properties, List.of("fgv-revival"), List.of("fgv-spexregister"));
 
         when(externals.findByExternalRef(anyString())).thenAnswer(call -> Optional.ofNullable(told.get(call.<String>getArgument(0))));
         when(externals.save(any(ExternalPayment.class))).thenAnswer(call -> call.getArgument(0));
         when(spexregister.byEmail(anyString())).thenReturn(Optional.empty());
         when(spexregister.create(anyString(), anyString(), anyString())).thenReturn(new Spexare("sp-1", "Greta", "Garbo", "greta@example.org"));
-        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyInt(), any(), anyString()))
+        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString()))
                 .thenReturn(Optional.of(new PaymentView("req-1", "FGV26ABCD", 200, PaymentStatus.MATCHED, clock.instant(), null, null, "sp-1", null,
                         List.of(), null, null, 200, null, false, false)));
 
@@ -117,7 +117,7 @@ class ExternalPaymentServiceTest {
     }
 
     private static ExternalPaymentRequest request(final String email, final String reference) {
-        return new ExternalPaymentRequest(email, "Greta", "Garbo", 2026, 200, LocalDate.of(2026, 11, 25), reference, false);
+        return new ExternalPaymentRequest(email, "Greta", "Garbo", 2026, 200, LocalDate.of(2026, 11, 25), reference, false, null);
     }
 
     @Test
@@ -131,7 +131,7 @@ class ExternalPaymentServiceTest {
         final KeycloakUser user = keycloak.findUserByEmail("greta@example.org").orElseThrow();
 
         assertThat(user.emailVerified()).isTrue();
-        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(false), eq(200), eq(LocalDate.of(2026, 11, 25)), eq("Online: order-1"));
+        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(false), eq(false), eq(200), eq(LocalDate.of(2026, 11, 25)), eq("Online: order-1"));
         verify(mails).accountCreated(user.id(), "greta@example.org");
     }
 
@@ -202,13 +202,13 @@ class ExternalPaymentServiceTest {
         final var result = service.record(SHOP, request("greta@example.org", "order-1"));
 
         assertThat(result.status()).isEqualTo(ExternalPaymentService.Status.DUPLICATE);
-        verify(payments, never()).recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyInt(), any(), anyString());
+        verify(payments, never()).recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString());
         assertThat(keycloak.users.values()).noneMatch(user -> "greta@example.org".equals(user.email()));
     }
 
     @Test
     void someoneWhoIsAlreadyAMemberThatYearIsReportedAndNothingIsRecorded() {
-        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyInt(), any(), anyString())).thenReturn(Optional.empty());
+        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString())).thenReturn(Optional.empty());
 
         final var result = service.record(SHOP, request("greta@example.org", "order-2"));
 
@@ -231,10 +231,49 @@ class ExternalPaymentServiceTest {
     void invalidRequestsAreRefusedBeforeAnythingIsDone() {
         assertThatThrownBy(() -> service.record(SHOP, request("not-an-email", "order-1"))).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.record(SHOP, request("greta@example.org", " "))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "G", "G", 1800, 200, null, "o", null)))
+        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "G", "G", 1800, 200, null, "o", null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "", "G", 2026, 200, null, "o", null)))
+        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "", "G", 2026, 200, null, "o", null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
+        verify(spexregister, never()).create(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void aSupportMemberGetsTheSupportAccessAndNotTheMemberAccess() {
+        final var result = service.record(SHOP, new ExternalPaymentRequest("stod@example.org", "Stig", "Stod", 2026, 100, LocalDate.of(2026, 11, 25), "order-9", false,
+                nu.fgv.membership.server.payment.FeeKind.SUPPORT));
+
+        assertThat(result.accountCreated()).isTrue();
+
+        final KeycloakUser user = keycloak.findUserByEmail("stod@example.org").orElseThrow();
+
+        assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).containsExactly("USER");
+        assertThat(keycloak.rolesOf(user.id(), "fgv-membership")).isEmpty();
+        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(false), eq(true), eq(100), any(), anyString());
+    }
+
+    @Test
+    void theSupportAccessIsKeptSeparatelyFromTheMemberAccess() {
+        defaults.set(nu.fgv.membership.server.payment.AccessProfile.SUPPORT, "fgv-spexregister", null);
+        defaults.set(nu.fgv.membership.server.payment.AccessProfile.SUPPORT, "fgv-membership", "USER");
+
+        assertThat(defaults.all(nu.fgv.membership.server.payment.AccessProfile.SUPPORT)).filteredOn(entry -> entry.role() != null)
+                .extracting(DefaultAccessService.Entry::clientId).containsExactly("fgv-membership");
+        assertThat(defaults.all()).filteredOn(entry -> entry.role() != null).extracting(DefaultAccessService.Entry::clientId)
+                .containsExactlyInAnyOrder("fgv-membership", "fgv-spexregister");
+    }
+
+    @Test
+    void aLifeMembershipFromTheShopIsStillSold() {
+        service.record(SHOP, new ExternalPaymentRequest("liv@example.org", "Liv", "Livs", 2026, 2000, LocalDate.of(2026, 11, 25), "order-10", true, null));
+
+        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(true), eq(false), eq(2000), any(), anyString());
+    }
+
+    @Test
+    void aFamilyMembershipIsNotSoldInTheShop() {
+        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("fam@example.org", "Fam", "Ilj", 2026, 350, null, "order-11", false,
+                nu.fgv.membership.server.payment.FeeKind.FAMILY))).isInstanceOf(IllegalArgumentException.class);
         verify(spexregister, never()).create(anyString(), anyString(), anyString());
     }
 }

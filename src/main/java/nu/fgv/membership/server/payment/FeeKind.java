@@ -28,5 +28,14 @@ public enum FeeKind {
     /** One family, for a year: one pays and every family member is a member */
     FAMILY,
     /** One person, for life from the year it is paid */
-    LIFETIME
+    LIFETIME,
+    /** A support membership (stödmedlemskap): a person, for a year, at another price and with other access */
+    SUPPORT;
+
+    /**
+     * @return which default access an account created by paying this kind of fee gets
+     */
+    public AccessProfile profile() {
+        return this == SUPPORT ? AccessProfile.SUPPORT : AccessProfile.MEMBER;
+    }
 }

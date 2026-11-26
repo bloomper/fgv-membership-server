@@ -33,6 +33,6 @@ public record PaymentView(String id, String reference, int amount, PaymentStatus
     public record Item(String id, int year, boolean lifetime, String status, String spexareId, boolean family) {
     }
 
-    public record Payee(String swishNumber, String bankAccount, String name) {
+    public record Payee(String swishNumber, String bankgiro, String bankAccount, String name) {
     }
 }

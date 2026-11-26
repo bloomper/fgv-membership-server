@@ -85,8 +85,7 @@ public class PaymentMails {
     public void reminder(final Spexare spexare, final PaymentView request) {
         send(spexare, mailer.text(LOCALE, "mail.payment.reminder.subject", request.reference()),
                 mailer.text(LOCALE, "mail.payment.reminder.body", request.amount(), request.reference(),
-                        properties.swishNumber() == null ? "" : properties.swishNumber(),
-                        properties.bankAccount() == null ? "" : properties.bankAccount(), webUrl + "/membership/pay/" + request.id()));
+                        properties.swishNumber() == null ? "" : properties.swishNumber(), otherWays(), webUrl + "/membership/pay/" + request.id()));
     }
 
     /**
@@ -117,6 +116,21 @@ public class PaymentMails {
             log.error("Could not send a payment link to spexare {}", spexare.id(), e);
             return false;
         }
+    }
+
+    /**
+     * The ways to pay besides Swish that are set: bankgiro, and a bank account for direct transfers.
+     */
+    private String otherWays() {
+        final StringBuilder ways = new StringBuilder();
+
+        if (properties.bankgiro() != null && !properties.bankgiro().isBlank()) {
+            ways.append("\nBankgiro: ").append(properties.bankgiro());
+        }
+        if (properties.bankAccount() != null && !properties.bankAccount().isBlank()) {
+            ways.append("\nBankkonto: ").append(properties.bankAccount());
+        }
+        return ways.toString();
     }
 
     public void receipt(final Spexare spexare, final PaymentView request) {

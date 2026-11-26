@@ -25,9 +25,12 @@ import java.time.LocalDate;
  * @param amount    whole kronor paid
  * @param paidOn    the day it was paid; today when missing
  * @param lifetime  a life membership from {@code year}
+ * @param kind      the kind of membership: {@code STANDARD} when missing; {@code SUPPORT} for a support membership, which gives a
+ *                  new account other access (and {@code LIFETIME} is the same as {@code lifetime}); {@code FAMILY} is not
+ *                  sold through the shop
  * @author Anders Jacobsson
  * @since 1.0
  */
 public record ExternalPaymentRequest(String email, String firstName, String lastName, Integer year, Integer amount, LocalDate paidOn,
-                                     String reference, Boolean lifetime) {
+                                     String reference, Boolean lifetime, nu.fgv.membership.server.payment.FeeKind kind) {
 }

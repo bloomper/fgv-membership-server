@@ -48,7 +48,7 @@ public class RevivalGraphqlApi {
     public record RevivalResult(String requestId, String reference, int amount, int included, List<String> alreadyMembers, Payee payee) {
     }
 
-    public record Payee(String swishNumber, String bankAccount, String name) {
+    public record Payee(String swishNumber, String bankgiro, String bankAccount, String name) {
     }
 
     @QueryMapping
@@ -64,6 +64,6 @@ public class RevivalGraphqlApi {
         final PaymentView request = result.request();
 
         return new RevivalResult(request.id(), request.reference(), request.amount(), result.included(), result.alreadyMembers(),
-                new Payee(request.payee().swishNumber(), request.payee().bankAccount(), request.payee().name()));
+                new Payee(request.payee().swishNumber(), request.payee().bankgiro(), request.payee().bankAccount(), request.payee().name()));
     }
 }

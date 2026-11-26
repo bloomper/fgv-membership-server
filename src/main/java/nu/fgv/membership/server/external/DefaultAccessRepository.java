@@ -22,5 +22,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * @author Anders Jacobsson
  * @since 1.0
  */
-public interface DefaultAccessRepository extends JpaRepository<DefaultAccess, String> {
+public interface DefaultAccessRepository extends JpaRepository<DefaultAccess, DefaultAccess.Key> {
+
+    java.util.List<DefaultAccess> findByProfile(nu.fgv.membership.server.payment.AccessProfile profile);
 }

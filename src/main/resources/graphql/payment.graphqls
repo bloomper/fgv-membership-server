@@ -56,6 +56,8 @@ enum FeeKind {
     FAMILY
     "One person, for life from the year it is paid"
     LIFETIME
+    "A support membership (stödmedlemskap): a person, for a year, at another price and with other access"
+    SUPPORT
 }
 
 input FeeLevelInput {
@@ -137,6 +139,9 @@ type PaymentItem {
 
 type Payee {
     swishNumber: String
+    "Pay to the bankgiro with the reference as the message"
+    bankgiro: String
+    "For a direct bank transfer; may be empty"
     bankAccount: String
     name: String!
 }

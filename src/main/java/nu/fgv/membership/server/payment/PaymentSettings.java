@@ -40,6 +40,7 @@ import java.util.Optional;
 public class PaymentSettings {
 
     public static final String SWISH_NUMBER = "payment.swish-number";
+    public static final String BANKGIRO = "payment.bankgiro";
     public static final String BANK_ACCOUNT = "payment.bank-account";
     public static final String PAYEE_NAME = "payment.payee-name";
     public static final String REMINDER_DAYS = "payment.reminder-days";
@@ -48,34 +49,42 @@ public class PaymentSettings {
     private final PaymentProperties defaults;
     private final AppSettingRepository stored;
     private final List<String> defaultRecipients;
+    private final String defaultBankgiro;
 
     @Autowired
     public PaymentSettings(final PaymentProperties defaults, final AppSettingRepository stored,
-                           @Value("${membership.registration.notify-recipients:}") final List<String> defaultRecipients) {
+                           @Value("${membership.registration.notify-recipients:}") final List<String> defaultRecipients,
+                           @Value("${membership.payment.bankgiro:}") final String defaultBankgiro) {
         this.defaults = defaults;
         this.stored = stored;
         this.defaultRecipients = defaultRecipients;
+        this.defaultBankgiro = defaultBankgiro;
     }
 
     /**
      * Settings that come from the configuration only, for tests.
      */
     public static PaymentSettings fixed(final PaymentProperties defaults, final List<String> recipients) {
-        return new PaymentSettings(defaults, null, recipients);
+        return new PaymentSettings(defaults, null, recipients, "");
     }
 
     /**
      * @param swishNumber    FGV's Swish number
-     * @param bankAccount    the bank account shown for transfers
+     * @param bankgiro       FGV's bankgiro (payments are made to it with the reference as message)
+     * @param bankAccount    the bank account shown for transfers; a direct bank transfer is allowed but may not be used
      * @param payeeName      the payee's name
      * @param reminderDays   days an open request waits before the payer is reminded once
      * @param recipients     who is emailed about payments and new registrations
      */
-    public record Values(String swishNumber, String bankAccount, String payeeName, int reminderDays, List<String> recipients) {
+    public record Values(String swishNumber, String bankgiro, String bankAccount, String payeeName, int reminderDays, List<String> recipients) {
     }
 
     public String swishNumber() {
         return get(SWISH_NUMBER).orElse(defaults.swishNumber());
+    }
+
+    public String bankgiro() {
+        return get(BANKGIRO).orElse(defaultBankgiro);
     }
 
     public String bankAccount() {
@@ -107,7 +116,7 @@ public class PaymentSettings {
 
     @Transactional(readOnly = true)
     public Values values() {
-        return new Values(swishNumber(), bankAccount(), payeeName(), Math.toIntExact(reminderAfter().toDays()), notifyRecipients());
+        return new Values(swishNumber(), bankgiro(), bankAccount(), payeeName(), Math.toIntExact(reminderAfter().toDays()), notifyRecipients());
     }
 
     /**
@@ -115,7 +124,7 @@ public class PaymentSettings {
      * @param recipients   email addresses, comma or line separated
      */
     @Transactional
-    public Values save(final String swishNumber, final String bankAccount, final String payeeName, final int reminderDays, final String recipients) {
+    public Values save(final String swishNumber, final String bankgiro, final String bankAccount, final String payeeName, final int reminderDays, final String recipients) {
         if (reminderDays < 1 || reminderDays > 60) {
             throw new IllegalArgumentException("Remind after 1 to 60 days");
         }
@@ -125,6 +134,7 @@ public class PaymentSettings {
             }
         }
         put(SWISH_NUMBER, swishNumber);
+        put(BANKGIRO, bankgiro);
         put(BANK_ACCOUNT, bankAccount);
         put(PAYEE_NAME, payeeName);
         put(REMINDER_DAYS, String.valueOf(reminderDays));

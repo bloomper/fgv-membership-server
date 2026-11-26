@@ -19,6 +19,10 @@ package nu.fgv.membership.server.external;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
+import nu.fgv.membership.server.payment.AccessProfile;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
 /**
@@ -28,8 +32,20 @@ import jakarta.persistence.Table;
  * @since 1.0
  */
 @Entity
+@IdClass(DefaultAccess.Key.class)
 @Table(name = "default_access")
 public class DefaultAccess {
+
+    /**
+     * @param profile which kinds of membership get this access
+     */
+    public record Key(AccessProfile profile, String clientId) implements java.io.Serializable {
+    }
+
+    @Id
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private AccessProfile profile;
 
     @Id
     @Column(name = "client_id", length = 100)
@@ -41,9 +57,14 @@ public class DefaultAccess {
     protected DefaultAccess() {
     }
 
-    public DefaultAccess(final String clientId, final String role) {
+    public DefaultAccess(final AccessProfile profile, final String clientId, final String role) {
+        this.profile = profile;
         this.clientId = clientId;
         this.role = role;
+    }
+
+    public AccessProfile getProfile() {
+        return profile;
     }
 
     public String getClientId() {

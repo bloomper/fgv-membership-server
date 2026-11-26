@@ -54,7 +54,7 @@ public class PersonalLinkService {
     /**
      * What the page of a personal link shows, and nothing more.
      */
-    public record Page(String reference, int amount, int paid, PaymentStatus status, List<Integer> years, String swishNumber, String bankAccount,
+    public record Page(String reference, int amount, int paid, PaymentStatus status, List<Integer> years, String swishNumber, String bankgiro, String bankAccount,
                        String swishLink, String qr, boolean optedOut) {
     }
 
@@ -103,7 +103,7 @@ public class PersonalLinkService {
             final boolean open = request.isPayable();
 
             return new Page(request.getReference(), request.getAmount(), request.getAmount() - payments.remaining(request), request.getStatus(),
-                    payments.yearsOf(request), properties.swishNumber(), properties.bankAccount(),
+                    payments.yearsOf(request), properties.swishNumber(), properties.bankgiro(), properties.bankAccount(),
                     open ? swish.link(payments.remaining(request), request.getReference()) : null,
                     open ? swish.qr(payments.remaining(request), request.getReference()) : null, optOuts.existsById(request.getSpexareId()));
         });
