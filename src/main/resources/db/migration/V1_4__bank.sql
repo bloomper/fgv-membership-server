@@ -1,11 +1,11 @@
--- How a bank's export looks: which columns hold what. Admins describe each bank once.
+-- How a bank export looks: which columns hold what. Admins describe each bank once.
 CREATE TABLE bank_format
 (
     pk             BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id             CHAR(36)     NOT NULL,
     name           VARCHAR(100) NOT NULL,
     charset        VARCHAR(30)  NOT NULL DEFAULT 'UTF-8',
-    delimiter      VARCHAR(1)   NOT NULL DEFAULT ';',
+    column_separator VARCHAR(1) NOT NULL DEFAULT ';',
     header_lines   INT          NOT NULL DEFAULT 1,
     date_column    INT          NOT NULL,
     amount_column  INT          NOT NULL,

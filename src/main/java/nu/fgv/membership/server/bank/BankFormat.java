@@ -51,7 +51,7 @@ public class BankFormat {
     @Column(nullable = false, length = 30)
     private String charset = "UTF-8";
 
-    @Column(nullable = false, length = 1)
+    @Column(name = "column_separator", nullable = false, length = 1)
     private String delimiter = ";";
 
     @Column(name = "header_lines", nullable = false)
