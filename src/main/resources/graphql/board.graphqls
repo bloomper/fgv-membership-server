@@ -1,0 +1,91 @@
+extend type Query {
+    "BOARD. The members of a year by name, life members included. By default those who count (paid or granted); status shows another status, e.g. PENDING."
+    members(year: Int!, status: String, how: String, wasMemberLastYear: Boolean): [Member!]!
+    "BOARD. Members in each year, how many of them for life, and how many joined (were not members the year before)."
+    memberTrend: [MemberCount!]!
+    "BOARD. Who a renewal reminder for the year would go to: last year's members with nothing for this year, not for life, not opted out."
+    renewalPreview(year: Int!, feeLevelId: ID!): RenewalPreview!
+    "BOARD. A member: memberships over the years, requests with their payments, and the emails sent."
+    memberDetail(spexareId: ID!): MemberDetail!
+    "BOARD. Spexare whose name contains every word, to pick one."
+    spexareSearch(q: String!): [SpexarePerson!]!
+}
+
+extend type Mutation {
+    "BOARD. Sends a renewal reminder with a payment request and a personal link to everyone in the group."
+    sendRenewals(year: Int!, feeLevelId: ID!): RenewalResult!
+    "BOARD. Grants a membership without a fee, for the year or for life from it. The note says why."
+    grantWaiver(spexareId: ID!, year: Int!, lifetime: Boolean! = false, note: String!): MemberItem!
+    "BOARD. Records a payment that has no request yet: the request is made and paid at once."
+    recordPaymentWithoutRequest(spexareId: ID!, feeLevelIds: [ID!]!, paidOn: String!, amount: Int!, how: PaymentHow!, note: String): PaymentRequest!
+    "BOARD. Asks a member to pay: a request, and an email with a personal link. False if no email could be sent."
+    sendPaymentLink(spexareId: ID!, feeLevelIds: [ID!]!): Boolean!
+}
+
+type Member {
+    membershipId: ID!
+    spexareId: ID!
+    "Null when Spexregister cannot be reached"
+    name: String
+    type: String!
+    year: Int!
+    lifetime: Boolean!
+    status: String!
+    how: String
+    note: String
+    "Chose not to be reminded"
+    optedOut: Boolean!
+    wasMemberLastYear: Boolean!
+}
+
+type MemberCount {
+    year: Int!
+    members: Int!
+    lifetime: Int!
+    joined: Int!
+}
+
+type RenewalPreview {
+    year: Int!
+    count: Int!
+    sample: [String!]!
+    subject: String!
+    text: String!
+}
+
+type RenewalResult {
+    sent: Int!
+    "No email address, or the email could not be sent"
+    skipped: Int!
+}
+
+type MemberDetail {
+    spexare: SpexarePerson!
+    optedOut: Boolean!
+    memberships: [MemberItem!]!
+    requests: [PaymentRequest!]!
+    emails: [EmailItem!]!
+}
+
+type MemberItem {
+    id: ID!
+    type: String!
+    year: Int!
+    lifetime: Boolean!
+    status: String!
+    how: String
+    note: String
+}
+
+type EmailItem {
+    "RENEWAL or LINK"
+    kind: String!
+    sentAt: String!
+}
+
+type SpexarePerson {
+    id: ID!
+    firstName: String!
+    lastName: String!
+    email: String
+}

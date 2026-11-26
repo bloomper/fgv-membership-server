@@ -310,6 +310,34 @@ public class PaymentService {
     }
 
     /**
+     * The payer says they paid, found by the request instead of by their account (a personal link).
+     */
+    @Transactional
+    public PaymentView reportBy(final String requestId, final String paidBy) {
+        final PaymentRequest request = find(requestId);
+
+        if (!request.isPayable()) {
+            throw new IllegalStateException("The request is " + request.getStatus());
+        }
+        request.report(paidBy == null || paidBy.isBlank() ? null : paidBy.strip(), clock.instant());
+        request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.REPORTED, null, null));
+
+        final PaymentView view = view(request, null);
+        final String payer = spexregister.byIds(List.of(request.getSpexareId())).stream().findFirst().map(Spexare::name).orElse(request.getSpexareId());
+
+        mails.adminNotice(PaymentMails.Event.REPORTED, payer, view.amount(), view.reference(), years(view),
+                request.getPaidBy() == null ? null : "Betalat av " + request.getPaidBy());
+        return view;
+    }
+
+    /**
+     * @return the years the request's memberships are for
+     */
+    public List<Integer> yearsOf(final PaymentRequest request) {
+        return view(request, null).memberships().stream().map(PaymentView.Item::year).toList();
+    }
+
+    /**
      * @return what a request still lacks, in whole kronor
      */
     public int remaining(final PaymentRequest request) {
@@ -365,6 +393,22 @@ public class PaymentService {
     @Transactional(readOnly = true)
     public List<PaymentView> requestsOf(final String userId) {
         return requests.findBySpexareIdOrderByCreatedAtDesc(spexareOf(userId).id()).stream().map(request -> view(request, null)).toList();
+    }
+
+    /**
+     * @return every payment request of a spexare, newest first, for the board's page about a member
+     */
+    @Transactional(readOnly = true)
+    public List<PaymentView> requestsOfSpexare(final String spexareId) {
+        return requests.findBySpexareIdOrderByCreatedAtDesc(spexareId).stream().map(request -> view(request, null)).toList();
+    }
+
+    /**
+     * @return the request, for code that needs its key
+     */
+    @Transactional(readOnly = true)
+    public PaymentRequest entity(final String requestId) {
+        return find(requestId);
     }
 
     /**

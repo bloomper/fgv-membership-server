@@ -104,6 +104,24 @@ public class PaymentMails {
         }
     }
 
+    /**
+     * A request to pay with a personal link: the renewal reminder, or a request the board made.
+     */
+    public boolean paymentLink(final Spexare spexare, final PaymentView request, final String link, final boolean renewal) {
+        if (spexare.email() == null || spexare.email().isBlank()) {
+            return false;
+        }
+        try {
+            mailer.send(spexare.email(), mailer.text(LOCALE, renewal ? "mail.renewal.subject" : "mail.link.subject"),
+                    mailer.text(LOCALE, renewal ? "mail.renewal.body" : "mail.link.body", request.amount(), request.reference(), link,
+                            request.memberships().stream().map(item -> String.valueOf(item.year())).reduce((a, b) -> a + ", " + b).orElse("")));
+            return true;
+        } catch (final MailException e) {
+            log.error("Could not send a payment link to spexare {}", spexare.id(), e);
+            return false;
+        }
+    }
+
     public void receipt(final Spexare spexare, final PaymentView request) {
         send(spexare, mailer.text(LOCALE, "mail.payment.receipt.subject"),
                 mailer.text(LOCALE, "mail.payment.receipt.body", request.amount(), request.reference(),

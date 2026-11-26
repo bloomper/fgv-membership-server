@@ -41,6 +41,11 @@ public interface SpexregisterClient {
     Optional<Spexare> byEmail(String email);
 
     /**
+     * @return spexare whose name or nickname contains every word, at most 25
+     */
+    List<Spexare> search(String query);
+
+    /**
      * Creates a spexare for someone who is not in the register yet, e.g. a new member who paid online. Spexregister links
      * the spexare to the user's account by email.
      */

@@ -60,6 +60,12 @@ public class RestSpexregisterClient implements SpexregisterClient {
     }
 
     @Override
+    public List<Spexare> search(final String query) {
+        return execute("query($q: String!) { medlemskapSpexareSearch(q: $q, first: 25) { id firstName lastName email } }", "q", query)
+                .field("medlemskapSpexareSearch").toEntityList(Spexare.class);
+    }
+
+    @Override
     public Optional<Spexare> byEmail(final String email) {
         return Optional.ofNullable(execute(BY_EMAIL, "e", email).field("medlemskapSpexareByEmail").toEntity(Spexare.class));
     }
