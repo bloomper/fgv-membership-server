@@ -54,6 +54,7 @@ class PaymentServiceTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-26T10:00:00Z"), ZoneOffset.UTC);
     private final Map<String, PaymentRequest> stored = new HashMap<>();
     private final Map<String, Membership> memberships = new HashMap<>();
+    private final List<Payment> paid = new ArrayList<>();
     private final Map<String, FeeLevel> feeLevels = new HashMap<>();
     private final PaymentRequestRepository requests = mock(PaymentRequestRepository.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
@@ -78,6 +79,11 @@ class PaymentServiceTest {
         ordinary2027 = fee(2027, false, "Ordinarie", 200);
         life = fee(null, true, "Livstid", 2000);
 
+        when(payments.save(any(Payment.class))).thenAnswer(call -> {
+            paid.add(call.getArgument(0));
+            return call.getArgument(0);
+        });
+        when(payments.findByRequestPk(any())).thenAnswer(call -> List.copyOf(paid));
         when(spexregister.forUser(USER)).thenReturn(Optional.of(spexare));
         when(spexregister.forUser("stranger")).thenReturn(Optional.empty());
         when(spexregister.byIds(any())).thenReturn(List.of(spexare));
@@ -207,12 +213,57 @@ class PaymentServiceTest {
     }
 
     @Test
-    void anAmountThatIsTooSmallIsRefused() {
+    void anAmountThatIsTooSmallLeavesTheRequestOpenWithTheDifferenceShown() {
+        final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
+        final PaymentView partly = service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 150, PaymentHow.SWISH, null);
+
+        assertThat(partly.status()).isEqualTo(PaymentStatus.OPEN);
+        assertThat(partly.paid()).isEqualTo(150);
+        assertThat(partly.memberships()).extracting(PaymentView.Item::status).containsOnly("PENDING");
+        verify(mails, never()).receipt(any(), any());
+
+        final PaymentView rest = service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 28), 50, PaymentHow.SWISH, null);
+
+        assertThat(rest.status()).isEqualTo(PaymentStatus.MATCHED);
+        assertThat(rest.paid()).isEqualTo(200);
+        verify(mails).receipt(any(), any());
+    }
+
+    @Test
+    void moreThanAskedForIsKeptAsAGift() {
+        final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
+        final PaymentView paidMore = service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 300, PaymentHow.CASH, null);
+
+        assertThat(paidMore.status()).isEqualTo(PaymentStatus.MATCHED);
+        assertThat(paidMore.paid()).isEqualTo(300);
+    }
+
+    @Test
+    void nothingCanBeRecordedForNothing() {
         final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
 
-        assertThatThrownBy(() -> service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 150, PaymentHow.SWISH, null))
+        assertThatThrownBy(() -> service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 0, PaymentHow.CASH, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void aPaymentCanBeUndoneInTheSameYearAndTheMembershipsStopCounting() {
+        final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
+
+        service.report(USER, made.id(), null);
+        service.recordPayment("treasurer", made.id(), LocalDate.of(2026, 11, 27), 200, PaymentHow.SWISH, null);
+
+        final Payment payment = paid.getFirst();
+
+        when(payments.findById(payment.getId())).thenReturn(Optional.of(payment));
+        org.mockito.Mockito.doAnswer(call -> paid.remove(call.<Payment>getArgument(0))).when(payments).delete(any(Payment.class));
+        when(requests.findById(payment.getRequestPk())).thenReturn(Optional.of(stored.get(made.id())));
+
+        final PaymentView undone = service.undoPayment(payment.getId());
+
+        assertThat(undone.status()).isEqualTo(PaymentStatus.REPORTED);
+        assertThat(undone.paid()).isZero();
+        assertThat(undone.memberships()).extracting(PaymentView.Item::status).containsOnly("REPORTED");
     }
 
     @Test

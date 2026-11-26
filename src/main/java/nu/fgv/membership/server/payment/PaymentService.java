@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.ZoneId;
@@ -198,27 +199,125 @@ public class PaymentService {
     }
 
     /**
-     * The treasurer records that the money arrived. The memberships become {@code PAID}, and the payer gets a receipt.
+     * The treasurer records that money arrived for a request. When what has been paid covers the request, the memberships
+     * become {@code PAID} and the payer gets a receipt; less leaves it open with the difference shown. More than asked is
+     * kept as a gift: the payment is the amount that came.
      */
     @Transactional
     public PaymentView recordPayment(final String actor, final String requestId, final LocalDate paidOn, final int amount,
                                      final PaymentHow how, final String note) {
+        return recordPayment(actor, requestId, paidOn, amount, how, note, null);
+    }
+
+    /**
+     * @param transactionPk the bank transaction the money came in, if it did
+     */
+    @Transactional
+    public PaymentView recordPayment(final String actor, final String requestId, final LocalDate paidOn, final int amount,
+                                     final PaymentHow how, final String note, final Long transactionPk) {
         final PaymentRequest request = find(requestId);
 
         if (!request.isPayable()) {
             throw new IllegalStateException("The request is " + request.getStatus());
         }
-        if (amount < request.getAmount()) {
-            throw new IllegalArgumentException("The amount %d is less than the %d asked for".formatted(amount, request.getAmount()));
+        if (amount <= 0) {
+            throw new IllegalArgumentException("The amount must be more than nothing");
         }
-        payments.save(new Payment(request.getPk(), paidOn, amount, how, actor, note, clock.instant()));
-        request.matched();
-        request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.PAID, membershipHow(how), note));
+        payments.save(new Payment(request.getPk(), paidOn, amount, how, actor, note, clock.instant()).fromTransaction(transactionPk));
+
+        final boolean covered = paidSoFar(request) >= request.getAmount();
+
+        if (covered) {
+            request.matched();
+            request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.PAID, membershipHow(how), note));
+        }
 
         final PaymentView view = view(request, null);
 
-        spexregister.byIds(List.of(request.getSpexareId())).forEach(spexare -> mails.receipt(spexare, view));
+        if (covered) {
+            spexregister.byIds(List.of(request.getSpexareId())).forEach(spexare -> mails.receipt(spexare, view));
+        }
         return view;
+    }
+
+    /**
+     * A bank transaction that turns out to be a payment already recorded by hand is linked to it, not paid twice.
+     */
+    @Transactional
+    public PaymentView linkTransaction(final String requestId, final Long transactionPk) {
+        final PaymentRequest request = find(requestId);
+        final Payment payment = payments.findByRequestPk(request.getPk()).stream().filter(p -> p.getTransactionPk() == null).findFirst()
+                .orElseThrow(() -> new IllegalStateException("There is no payment without a transaction on " + request.getReference()));
+
+        payment.linkTransaction(transactionPk);
+        return view(request, null);
+    }
+
+    /**
+     * Takes a recorded payment back, until the end of the year it was recorded. The request is open or reported again and
+     * its memberships do not count.
+     */
+    @Transactional
+    public PaymentView undoPayment(final String paymentId) {
+        final Payment payment = payments.findById(paymentId).orElseThrow(() -> new IllegalArgumentException("Unknown payment " + paymentId));
+
+        if (payment.getRecordedAt().atZone(ZONE).getYear() != clock.instant().atZone(ZONE).getYear()) {
+            throw new IllegalStateException("A payment can only be undone in the year it was recorded");
+        }
+
+        final PaymentRequest request = requests.findById(payment.getRequestPk()).orElseThrow();
+        final boolean wasCovered = request.getStatus() == PaymentStatus.MATCHED;
+
+        payments.delete(payment);
+        if (wasCovered && paidSoFar(request) < request.getAmount()) {
+            request.reopen();
+            request.getMembershipIds().forEach(id -> memberships.setStatus(id, request.getStatus() == PaymentStatus.REPORTED
+                    ? MembershipStatus.REPORTED : MembershipStatus.PENDING, null, null));
+        }
+        return view(request, null);
+    }
+
+    /**
+     * @param reference the request's reference
+     * @param spexareName who it was for
+     * @param transaction whether it came from an imported bank transaction
+     */
+    public record PaymentLine(String id, String reference, String spexareName, java.time.LocalDate paidOn, int amount, PaymentHow how,
+                              String note, boolean transaction) {
+    }
+
+    /**
+     * The payments recorded this year, newest first: the ones that can still be undone.
+     */
+    @Transactional(readOnly = true)
+    public List<PaymentLine> thisYearsPayments() {
+        final Instant start = Year.now(clock.withZone(ZONE)).atDay(1).atStartOfDay(ZONE).toInstant();
+        final List<Payment> found = payments.findByRecordedAtGreaterThanEqualOrderByRecordedAtDesc(start);
+        final Map<Long, PaymentRequest> byPk = new java.util.HashMap<>();
+
+        found.forEach(payment -> byPk.computeIfAbsent(payment.getRequestPk(), pk -> requests.findById(pk).orElse(null)));
+
+        final Map<String, Spexare> spexare = spexregister.byIds(byPk.values().stream().filter(java.util.Objects::nonNull)
+                .map(PaymentRequest::getSpexareId).distinct().toList()).stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
+
+        return found.stream().filter(payment -> byPk.get(payment.getRequestPk()) != null).map(payment -> {
+            final PaymentRequest request = byPk.get(payment.getRequestPk());
+
+            return new PaymentLine(payment.getId(), request.getReference(), spexare.containsKey(request.getSpexareId())
+                    ? spexare.get(request.getSpexareId()).name() : null, payment.getPaidOn(), payment.getAmount(), payment.getHow(),
+                    payment.getNote(), payment.getTransactionPk() != null);
+        }).toList();
+    }
+
+    /**
+     * @return what a request still lacks, in whole kronor
+     */
+    public int remaining(final PaymentRequest request) {
+        return Math.max(0, request.getAmount() - paidSoFar(request));
+    }
+
+    private int paidSoFar(final PaymentRequest request) {
+        return payments.findByRequestPk(request.getPk()).stream().mapToInt(Payment::getAmount).sum();
     }
 
     /**
@@ -330,6 +429,6 @@ public class PaymentService {
 
         return new PaymentView(request.getId(), request.getReference(), request.getAmount(), request.getStatus(), request.getCreatedAt(),
                 request.getReportedAt(), request.getPaidBy(), request.getSpexareId(), spexare == null ? null : spexare.name(), items,
-                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null);
+                new PaymentView.Payee(properties.swishNumber(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request));
     }
 }

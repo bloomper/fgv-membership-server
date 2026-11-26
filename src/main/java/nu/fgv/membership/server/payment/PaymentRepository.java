@@ -23,4 +23,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * @since 1.0
  */
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
+
+    java.util.List<Payment> findByRequestPk(Long requestPk);
+
+    java.util.List<Payment> findByTransactionPk(Long transactionPk);
+
+    java.util.Optional<Payment> findById(String id);
+
+    java.util.List<Payment> findByRecordedAtGreaterThanEqualOrderByRecordedAtDesc(java.time.Instant since);
 }

@@ -1,0 +1,114 @@
+enum TransactionStatus {
+    UNMATCHED
+    MATCHED
+    DISMISSED
+}
+
+extend type Query {
+    "TREASURER. The bank formats, to pick one when uploading."
+    bankFormats: [BankFormat!]!
+    "TREASURER. Imported incoming transactions that nothing has been matched to, oldest first."
+    unmatchedTransactions: [BankTransaction!]!
+    "TREASURER. Requests a transaction could be for: a mistyped reference, or the same amount and a payer who resembles the member."
+    transactionSuggestions(id: ID!): [TransactionSuggestion!]!
+    "TREASURER. This year's recorded payments, newest first; they can be undone until the year ends."
+    paymentsThisYear: [PaymentLine!]!
+}
+
+extend type Mutation {
+    """
+    TREASURER. Imports a bank statement (the CSV text; the web decodes it with the format's charset). Incoming transactions
+    are kept, new ones only; those with a valid reference that covers the request are matched at once. A file with rows
+    that cannot be read imports nothing.
+    """
+    importStatement(formatId: ID!, fileName: String!, content: String!): ImportResult!
+    """
+    TREASURER. Matches a transaction to one request, or splits it over several (the last gets what is left). A request that
+    is paid already is linked to the transaction instead of being paid twice.
+    """
+    matchTransaction(id: ID!, requestIds: [ID!]!): BankTransaction!
+    "TREASURER. Not a membership payment: its text and payer are deleted."
+    dismissTransaction(id: ID!): BankTransaction!
+    "TREASURER. Takes a payment back, in the year it was recorded."
+    undoPayment(id: ID!): Boolean!
+    "ADMIN. Creates a bank format, or changes one when id is given."
+    bankFormatSave(input: BankFormatInput!): BankFormat!
+    "ADMIN."
+    bankFormatDelete(id: ID!): Boolean!
+}
+
+input BankFormatInput {
+    id: ID
+    name: String!
+    charset: String! = "UTF-8"
+    delimiter: String! = ";"
+    "Rows before the first transaction"
+    headerLines: Int! = 1
+    "Columns are counted from 1"
+    dateColumn: Int!
+    amountColumn: Int!
+    textColumn: Int!
+    payerColumn: Int
+    "A Java date pattern, e.g. yyyy-MM-dd"
+    dateFormat: String! = "yyyy-MM-dd"
+    "Amounts like 1 200,00 rather than 1,200.00"
+    decimalComma: Boolean! = true
+}
+
+type BankFormat {
+    id: ID!
+    name: String!
+    charset: String!
+    delimiter: String!
+    headerLines: Int!
+    dateColumn: Int!
+    amountColumn: Int!
+    textColumn: Int!
+    payerColumn: Int
+    dateFormat: String!
+    decimalComma: Boolean!
+}
+
+type BankTransaction {
+    id: ID!
+    bookedOn: String!
+    "Whole kronor"
+    amount: Int!
+    text: String
+    payer: String
+    status: TransactionStatus!
+    fileName: String
+}
+
+type TransactionSuggestion {
+    requestId: ID!
+    reference: String!
+    spexareName: String
+    amount: Int!
+    status: PaymentStatus!
+    "REFERENCE (a mistyped reference) or NAME"
+    why: String!
+    score: Float!
+}
+
+type ImportResult {
+    read: Int!
+    added: Int!
+    duplicates: Int!
+    outgoing: Int!
+    "Matched at once by their reference"
+    matched: Int!
+    errors: [String!]!
+}
+
+type PaymentLine {
+    id: ID!
+    reference: String!
+    spexareName: String
+    paidOn: String!
+    amount: Int!
+    how: PaymentHow!
+    note: String
+    "Whether it came from an imported transaction"
+    transaction: Boolean!
+}

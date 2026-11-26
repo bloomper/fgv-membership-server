@@ -68,6 +68,9 @@ public class Payment {
     @Column(name = "recorded_at", nullable = false)
     private Instant recordedAt;
 
+    @Column(name = "transaction_pk")
+    private Long transactionPk;
+
     protected Payment() {
     }
 
@@ -80,6 +83,27 @@ public class Payment {
         this.recordedBy = recordedBy;
         this.note = note;
         this.recordedAt = now;
+    }
+
+    public Payment fromTransaction(final Long transactionPk) {
+        this.transactionPk = transactionPk;
+        return this;
+    }
+
+    public void linkTransaction(final Long transactionPk) {
+        this.transactionPk = transactionPk;
+    }
+
+    public Long getPk() {
+        return pk;
+    }
+
+    public Long getTransactionPk() {
+        return transactionPk;
+    }
+
+    public Instant getRecordedAt() {
+        return recordedAt;
     }
 
     public String getId() {

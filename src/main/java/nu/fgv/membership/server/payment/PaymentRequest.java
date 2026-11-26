@@ -106,6 +106,13 @@ public class PaymentRequest {
         this.status = PaymentStatus.MATCHED;
     }
 
+    /**
+     * Back to what it was before the payment: reported if the payer had said so.
+     */
+    public void reopen() {
+        this.status = reportedAt != null ? PaymentStatus.REPORTED : PaymentStatus.OPEN;
+    }
+
     public void cancel() {
         this.status = PaymentStatus.CANCELLED;
     }

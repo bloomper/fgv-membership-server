@@ -88,6 +88,8 @@ type PaymentRequest {
     spexareId: ID!
     "Only for the treasurer's lists"
     spexareName: String
+    "What has been paid so far, in whole kronor; less than amount leaves the request open"
+    paid: Int!
     memberships: [PaymentItem!]!
     payee: Payee!
     "Opens Swish with number, amount and reference filled in, on a phone. Null once paid or when there is no Swish number."

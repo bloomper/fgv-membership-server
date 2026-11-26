@@ -28,7 +28,7 @@ import java.util.List;
  * @since 1.0
  */
 public record PaymentView(String id, String reference, int amount, PaymentStatus status, Instant createdAt, Instant reportedAt,
-                          String paidBy, String spexareId, String spexareName, List<Item> memberships, Payee payee, String swishLink) {
+                          String paidBy, String spexareId, String spexareName, List<Item> memberships, Payee payee, String swishLink, int paid) {
 
     public record Item(String id, int year, boolean lifetime, String status) {
     }

@@ -31,7 +31,7 @@ import java.util.Locale;
 public final class PaymentReference {
 
     static final String PREFIX = "FGV";
-    static final String ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    public static final String ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private PaymentReference() {
