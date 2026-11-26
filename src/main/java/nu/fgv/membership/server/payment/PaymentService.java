@@ -577,24 +577,39 @@ public class PaymentService {
     }
 
     /**
-     * @param request       the one request that pays for them all
-     * @param included      how many memberships it covers
-     * @param alreadyMembers the spexare who were members for the year already and are left out
+     * @param request          the one request that pays for them all
+     * @param included         how many memberships it covers
+     * @param alreadyMembers   the spexare who were members for the year already and are left out
+     * @param alreadyRequested the spexare who are on another request that can still be paid, and are left out
+     * @param existing         whether the application had asked with this key before, so that this is that request again
      */
-    public record RevivalRequest(PaymentView request, int included, List<String> alreadyMembers) {
+    public record RevivalRequest(PaymentView request, int included, List<String> alreadyMembers, List<String> alreadyRequested, boolean existing) {
     }
 
     /**
      * A revival pays the year's fee for its participants (spec 5.7): one request for the lot, which the treasurer matches
      * as usual, and the memberships become {@code PAID} with the revival as the payer. Participants who are members
-     * for the year already are left out and reported.
+     * for the year already, or are on another request that can still be paid, are left out and reported.
      *
+     * <p>Asking again with the same {@code key} gives the request that was made, not another: a sync that is resumed does
+     * not ask for the same money twice. A request that was cancelled is not given again.
+     *
+     * @param source     the application that asks, by its client
+     * @param key        the application's own key for the request (e.g. the revival and the year), or null for none
      * @param payerLabel who pays, e.g. the revival's name and year
      */
     @Transactional
-    public RevivalRequest requestForRevival(final String actor, final String payerLabel, final List<String> spexareIds, final String feeLevelId) {
+    public RevivalRequest requestForRevival(final String actor, final String source, final String key, final String payerLabel,
+                                            final List<String> spexareIds, final String feeLevelId) {
         if (payerLabel == null || payerLabel.isBlank()) {
             throw new IllegalArgumentException("Say who pays");
+        }
+        if (key != null && !key.isBlank()) {
+            final var earlier = requests.findFirstByExternalSourceAndExternalReferenceOrderByCreatedAtDesc(source, key.strip());
+
+            if (earlier.isPresent() && earlier.get().getStatus() != PaymentStatus.CANCELLED) {
+                return new RevivalRequest(view(earlier.get(), null), earlier.get().getMembershipIds().size(), List.of(), List.of(), true);
+            }
         }
 
         final FeeLevel level = fees.findById(feeLevelId).orElseThrow(() -> new IllegalArgumentException("Unknown fee"));
@@ -606,23 +621,43 @@ public class PaymentService {
         final int year = level.getYear();
         final Set<String> membershipIds = new LinkedHashSet<>();
         final List<String> already = new java.util.ArrayList<>();
+        final List<String> requested = new java.util.ArrayList<>();
 
         for (final String spexareId : new LinkedHashSet<>(spexareIds)) {
-            if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(level.getType())
+            final List<Membership> held = membershipRepository.findBySpexareId(spexareId);
+
+            if (held.stream().anyMatch(existing -> existing.getType().equals(level.getType())
                     && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
                 already.add(spexareId);
+            } else if (held.stream().anyMatch(existing -> existing.getType().equals(level.getType()) && existing.getYear() == year
+                    && requests.isOnOpenRequest(existing.getId()))) {
+                requested.add(spexareId);
             } else {
                 membershipIds.add(memberships.record(spexareId, level.getType(), year, false, MembershipStatus.PENDING, null, null).getId());
             }
         }
         if (membershipIds.isEmpty()) {
-            throw new IllegalArgumentException("Everyone is a member for " + year + " already");
+            throw new IllegalArgumentException("Everyone is a member for " + year + " already, or is on a request that is waiting to be paid");
         }
 
-        final PaymentRequest request = requests.save(PaymentRequest.forRevival(newReference(Year.now(clock.withZone(ZONE)).getValue()), payerLabel.strip(),
-                level.getAmount() * membershipIds.size(), actor, membershipIds, clock.instant()));
+        final PaymentRequest request = PaymentRequest.forRevival(newReference(Year.now(clock.withZone(ZONE)).getValue()), payerLabel.strip(),
+                level.getAmount() * membershipIds.size(), actor, membershipIds, clock.instant());
 
-        return new RevivalRequest(view(request, null), membershipIds.size(), already);
+        request.external(source, key == null || key.isBlank() ? null : key.strip());
+        return new RevivalRequest(view(requests.save(request), null), membershipIds.size(), already, requested, false);
+    }
+
+    /**
+     * What became of a request that an application made: whether it has been paid. Only the application that made it may ask.
+     */
+    @Transactional(readOnly = true)
+    public RevivalRequest revivalRequest(final String source, final String requestId) {
+        final PaymentRequest request = find(requestId);
+
+        if (!source.equals(request.getExternalSource())) {
+            throw new AccessDeniedException("Not your payment request");
+        }
+        return new RevivalRequest(view(request, null), request.getMembershipIds().size(), List.of(), List.of(), true);
     }
 
     private PaymentRequest find(final String id) {

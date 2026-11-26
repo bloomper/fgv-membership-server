@@ -98,6 +98,15 @@ data.
 [[revival]]
 == Payments by a revival
 
-`REVIVAL`: `revivalFeeLevels` and `createRevivalPaymentRequest(payerLabel, spexareIds, feeLevelId)`: one request that covers
-the year's standard fee for the participants. Those who are members already are left out and listed. The treasurer matches
-the payment as usual, and the memberships become paid with the revival as the payer.
+`REVIVAL`: `revivalFeeLevels`, `createRevivalPaymentRequest(payerLabel, spexareIds, feeLevelId, key, actingPerson)` and
+`revivalPaymentRequest(id)`. One request covers the year's standard fee for the participants, and the treasurer matches the
+payment as usual: the memberships become paid with the revival as the payer.
+
+* Participants who are members for the year already, or who are on another request that can still be paid, are left out and
+  listed (`alreadyMembers`, `alreadyRequested`).
+* With a `key` (the revival and the year, say) asking again gives the request that was made (`existing` is true), whatever
+  participants are named the second time, so a sync that is resumed does not ask for the money twice. A cancelled request is
+  not given again. To ask for people who were added later, use another key.
+* `actingPerson`, the person on whose behalf the revival asks, is kept in the audit log.
+* `revivalPaymentRequest(id)` says whether the request has been paid (`status`, `paid`, `amount`). Only the application that
+  made the request may ask.

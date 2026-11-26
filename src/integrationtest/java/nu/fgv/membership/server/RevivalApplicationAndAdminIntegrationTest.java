@@ -29,17 +29,33 @@ class RevivalApplicationAndAdminIntegrationTest extends AbstractPaymentIntegrati
                 .path("revivalFeeLevels[0].id").entity(String.class).isEqualTo(fee);
 
         final String request = graphQl(serviceToken("fgv-revival-service")).document("""
-                        mutation($ids: [ID!]!, $fee: ID!) { createRevivalPaymentRequest(payerLabel: "Nyuppsättning 2027", spexareIds: $ids, feeLevelId: $fee)
-                        { requestId reference amount included alreadyMembers payee { bankgiro swishNumber } } }""")
+                        mutation($ids: [ID!]!, $fee: ID!) { createRevivalPaymentRequest(payerLabel: "Nyuppsättning 2027", spexareIds: $ids, feeLevelId: $fee,
+                        key: "revival-7-2027", actingPerson: "Dirk Ektör") { requestId reference amount included existing status alreadyMembers payee { bankgiro swishNumber } } }""")
                 .variable("ids", List.of(SPEXARE_ID, B)).variable("fee", fee).execute().errors().verify()
                 .path("createRevivalPaymentRequest.amount").entity(Integer.class).isEqualTo(400)
                 .path("createRevivalPaymentRequest.included").entity(Integer.class).isEqualTo(2)
                 .path("createRevivalPaymentRequest.payee.bankgiro").entity(String.class).isEqualTo("123-4567")
                 .path("createRevivalPaymentRequest.requestId").entity(String.class).get();
 
+        // Asking again for the same key gives the same request, even for more people
+        graphQl(serviceToken("fgv-revival-service")).document("""
+                        mutation($ids: [ID!]!, $fee: ID!) { createRevivalPaymentRequest(payerLabel: "Nyuppsättning 2027", spexareIds: $ids, feeLevelId: $fee, key: "revival-7-2027")
+                        { requestId existing included } }""")
+                .variable("ids", List.of(SPEXARE_ID, B, "0197d6a0-0000-7000-8000-000000000003")).variable("fee", fee).execute().errors().verify()
+                .path("createRevivalPaymentRequest.requestId").entity(String.class).isEqualTo(request)
+                .path("createRevivalPaymentRequest.existing").entity(Boolean.class).isEqualTo(true)
+                .path("createRevivalPaymentRequest.included").entity(Integer.class).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT COUNT(*) FROM payment_request").query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT detail FROM audit_entry WHERE action = 'REVIVAL_PAYMENT_REQUEST'").query(String.class).single()).contains("Dirk Ektör").contains("2 people");
+
+        graphQl(serviceToken("fgv-revival-service")).document("query($id: ID!) { revivalPaymentRequest(id: $id) { status paid amount } }").variable("id", request).execute().errors().verify()
+                .path("revivalPaymentRequest.status").entity(String.class).isEqualTo("OPEN");
         graphQl(userToken(TREASURER)).document("{ waitingPaymentRequests { id spexareName spexareId } }").execute().errors().verify()
                 .path("waitingPaymentRequests[0].spexareName").entity(String.class).isEqualTo("Nyuppsättning 2027");
         record(request, 400);
+        graphQl(serviceToken("fgv-revival-service")).document("query($id: ID!) { revivalPaymentRequest(id: $id) { status paid } }").variable("id", request).execute().errors().verify()
+                .path("revivalPaymentRequest.status").entity(String.class).isEqualTo("MATCHED")
+                .path("revivalPaymentRequest.paid").entity(Integer.class).isEqualTo(400);
 
         assertThat(jdbcClient.sql("SELECT how FROM membership").query(String.class).list()).containsOnly("REVIVAL");
         assertThat(jdbcClient.sql("SELECT status FROM membership").query(String.class).list()).containsOnly("PAID");

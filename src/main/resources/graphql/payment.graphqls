@@ -152,25 +152,36 @@ type Payee {
 }
 
 extend type Query {
-    "REVIVAL. The yearly fees (not the life fee) for the year, or for every year."
+    "REVIVAL. The yearly standard fees for the year, or for every year."
     revivalFeeLevels(year: Int): [FeeLevel!]!
+    "REVIVAL. A request that the caller made: whether it has been paid. Only the application that made it may ask."
+    revivalPaymentRequest(id: ID!): RevivalPaymentRequest!
 }
 
 extend type Mutation {
     """
-    REVIVAL. One payment request that covers the FGV fee for these participants (spexare ids) for the fee's year. Those who
-    are members that year already are left out and listed. The revival pays the total with the reference; the treasurer
-    matches it, and the memberships become paid, with the revival as the payer.
+    REVIVAL. One payment request that covers the standard fee for these participants (spexare ids) for the fee's year. Those who
+    are members that year already, or are on another request that can still be paid, are left out and listed. The revival
+    pays the total with the reference; the treasurer matches it, and the memberships become paid, with the revival as the
+    payer. With a key (e.g. the revival and the year), asking again gives the request that was made, so a sync that is
+    resumed does not ask twice; a cancelled request is not given again. actingPerson, the person on whose behalf it is
+    asked, is kept in the audit log.
     """
-    createRevivalPaymentRequest(payerLabel: String!, spexareIds: [ID!]!, feeLevelId: ID!): RevivalPaymentRequest!
+    createRevivalPaymentRequest(payerLabel: String!, spexareIds: [ID!]!, feeLevelId: ID!, key: String, actingPerson: String): RevivalPaymentRequest!
 }
 
 type RevivalPaymentRequest {
     requestId: ID!
     reference: String!
     amount: Int!
+    "What has been paid so far"
+    paid: Int!
+    status: PaymentStatus!
     "How many participants the request covers"
     included: Int!
+    "True when the key had been used before, so this is that request again"
+    existing: Boolean!
     alreadyMembers: [ID!]!
+    alreadyRequested: [ID!]!
     payee: Payee!
 }

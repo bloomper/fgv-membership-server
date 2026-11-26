@@ -36,6 +36,19 @@ public interface PaymentRequestRepository extends JpaRepository<PaymentRequest, 
 
     List<PaymentRequest> findBySpexareIdOrderByCreatedAtDesc(String spexareId);
 
+    /**
+     * The latest request that another application made with its own key.
+     */
+    Optional<PaymentRequest> findFirstByExternalSourceAndExternalReferenceOrderByCreatedAtDesc(String externalSource, String externalReference);
+
+    /**
+     * @return whether a membership is on a request that can still be paid
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select count(r) > 0 from PaymentRequest r join r.membershipIds m
+            where m = :membershipId and r.status in (nu.fgv.membership.server.payment.PaymentStatus.OPEN, nu.fgv.membership.server.payment.PaymentStatus.REPORTED)""")
+    boolean isOnOpenRequest(@org.springframework.data.repository.query.Param("membershipId") String membershipId);
+
     List<PaymentRequest> findByStatusInOrderByCreatedAtAsc(java.util.Collection<PaymentStatus> statuses);
 
     List<PaymentRequest> findByStatusAndReminderSentAtIsNullAndCreatedAtBefore(PaymentStatus status, Instant before);

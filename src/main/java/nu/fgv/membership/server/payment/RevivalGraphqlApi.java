@@ -16,6 +16,7 @@
 
 package nu.fgv.membership.server.payment;
 
+import nu.fgv.membership.server.board.AuditService;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -27,8 +28,9 @@ import org.springframework.stereotype.Controller;
 import java.util.List;
 
 /**
- * What Nyuppsättning may do here, through the {@code REVIVAL} role (spec 5.7): see the year's fees and ask for one
- * payment request that covers the participants it pays the FGV fee for. It cannot see members or payments.
+ * What Nyuppsättning may do here, through the {@code REVIVAL} role (spec 5.7): see the year's fees, ask for one payment
+ * request that covers the participants it pays the FGV fee for, and ask whether its request has been paid. It cannot see
+ * members or other payments.
  *
  * @author Anders Jacobsson
  * @since 1.0
@@ -39,13 +41,16 @@ public class RevivalGraphqlApi {
 
     private final FeeService fees;
     private final PaymentService payments;
+    private final AuditService audit;
 
-    public RevivalGraphqlApi(final FeeService fees, final PaymentService payments) {
+    public RevivalGraphqlApi(final FeeService fees, final PaymentService payments, final AuditService audit) {
         this.fees = fees;
         this.payments = payments;
+        this.audit = audit;
     }
 
-    public record RevivalResult(String requestId, String reference, int amount, int included, List<String> alreadyMembers, Payee payee) {
+    public record RevivalResult(String requestId, String reference, int amount, int paid, PaymentStatus status, int included, boolean existing,
+                                List<String> alreadyMembers, List<String> alreadyRequested, Payee payee) {
     }
 
     public record Payee(String swishNumber, String bankgiro, String bankAccount, String name) {
@@ -59,11 +64,27 @@ public class RevivalGraphqlApi {
 
     @MutationMapping
     public RevivalResult createRevivalPaymentRequest(@AuthenticationPrincipal final Jwt caller, @Argument final String payerLabel,
-                                                     @Argument final List<String> spexareIds, @Argument final String feeLevelId) {
-        final PaymentService.RevivalRequest result = payments.requestForRevival(caller.getSubject(), payerLabel, spexareIds, feeLevelId);
+                                                     @Argument final List<String> spexareIds, @Argument final String feeLevelId,
+                                                     @Argument final String key, @Argument final String actingPerson) {
+        final PaymentService.RevivalRequest result = payments.requestForRevival(caller.getSubject(), caller.getClaimAsString("azp"), key, payerLabel, spexareIds, feeLevelId);
+
+        if (!result.existing()) {
+            audit.log(caller.getSubject(), "REVIVAL_PAYMENT_REQUEST", result.request().reference(), "%s, %d people%s".formatted(payerLabel, result.included(),
+                    actingPerson == null || actingPerson.isBlank() ? "" : ", on behalf of " + actingPerson.strip()));
+        }
+        return view(result);
+    }
+
+    @QueryMapping
+    public RevivalResult revivalPaymentRequest(@AuthenticationPrincipal final Jwt caller, @Argument final String id) {
+        return view(payments.revivalRequest(caller.getClaimAsString("azp"), id));
+    }
+
+    private static RevivalResult view(final PaymentService.RevivalRequest result) {
         final PaymentView request = result.request();
 
-        return new RevivalResult(request.id(), request.reference(), request.amount(), result.included(), result.alreadyMembers(),
+        return new RevivalResult(request.id(), request.reference(), request.amount(), request.paid(), request.status(), result.included(), result.existing(),
+                result.alreadyMembers(), result.alreadyRequested(),
                 new Payee(request.payee().swishNumber(), request.payee().bankgiro(), request.payee().bankAccount(), request.payee().name()));
     }
 }
