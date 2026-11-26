@@ -81,7 +81,7 @@ membership:
   mail:
     from: ${API_MAIL_FROM:${SMTP_FROM:noreply@localhost}}
   security:
-    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership}
+    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service}
   # The roles people hold on each application, lowest first. Granting a role grants the ones before it.
   # Service roles (SYNC, NOTIFY, IMPORT, REVIVAL, ...) are never listed.
   applications:
@@ -103,3 +103,6 @@ membership:
       ladder: [USER, EDITOR, ADMIN]
     - client-id: fgv-revival
       ladder: [USER, OBSERVER, SUPER_ADMIN]
+  sync:
+    # Told after each change to memberships (Spexregister's /api/sync/notify); empty relies on the consumers' pulls
+    notify-urls: ${API_SYNC_NOTIFY_URLS:}
