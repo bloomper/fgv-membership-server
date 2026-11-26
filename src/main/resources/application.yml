@@ -103,6 +103,11 @@ membership:
       ladder: [USER, EDITOR, ADMIN]
     - client-id: fgv-revival
       ladder: [USER, OBSERVER, SUPER_ADMIN]
+  data:
+    # Replaces everything with sample data at every start (never in the production profile), see spec 5.10
+    import-sample-data: ${API_IMPORT_SAMPLE_DATA:false}
+    # Where the sample bank statements are written, for uploading by hand
+    statement-dir: ${API_SAMPLE_STATEMENT_DIR:./sample-data}
   sync:
     # Told after each change to memberships (Spexregister's /api/sync/notify); empty relies on the consumers' pulls
     notify-urls: ${API_SYNC_NOTIFY_URLS:}

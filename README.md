@@ -53,6 +53,22 @@ proxy sends `api.membership.fgv.local.nu` to the container, or to port 8090 on t
 The secret files are committed as placeholders (`git update-index --skip-worktree` is done by the scripts), and
 `.docker` is otherwise ignored, so a new secret file is added with `git add -f`.
 
+## Sample data
+
+`API_IMPORT_SAMPLE_DATA=true` (in `.env`, or `membership.data.import-sample-data`) replaces everything with sample data at
+every start, as in the other FGV servers; it is refused in the `production` profile. It needs, running:
+
+- fgv-infra-deploy's sample users (`bin/seed-users.sh --local`): `admin@fgv.nu`, `editor@fgv.nu`, `user@fgv.nu`,
+  `treasurer@fgv.nu` and `no-access@fgv.nu` are used by their fixed ids, and their accounts are never changed;
+- Spexregister with its sample data: the spexare are the ones linked to `member01@fgv.nu` to `member45@fgv.nu`.
+
+It creates fee levels, memberships over several years in every status (also life, support, family and a revival's), requests
+that are open, reported, paid by hand or by bank transfer, personal links (`sample-personal-link-open` and
+`sample-personal-link-reported` are the tokens), applications and an audit trail. The one thing it does in Keycloak is to
+create two accounts waiting for approval (`pending.verified@fgv.nu`, `pending.unverified@fgv.nu`) when missing.
+Two sample bank statements, one per bank format and with references of requests that are still open, are written to
+`API_SAMPLE_STATEMENT_DIR` (`.docker/sample-data` with Docker Compose, otherwise `./sample-data`), to upload as the treasurer.
+
 ## Configuration
 
 | Variable                           | Purpose                                                                              |

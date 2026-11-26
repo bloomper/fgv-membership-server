@@ -44,6 +44,8 @@ services:
       API_KEYCLOAK_REALM: ${API_KEYCLOAK_REALM}
       API_KEYCLOAK_SERVICE_CLIENT_ID: fgv-membership-service
       API_SPEXREGISTER_GRAPHQL_URL: http://spexregister-api:8080/api/graphql
+      API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA:-false}
+      API_SAMPLE_STATEMENT_DIR: /sample-data
       API_SYNC_NOTIFY_URLS: http://spexregister-api:8080/api/sync/notify
       API_REGISTRATION_NOTIFY_RECIPIENTS: admin@fgv.local.nu
       SMTP_HOST: mailpit
@@ -52,6 +54,8 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak-server:8080/auth/realms/fgv/protocol/openid-connect/certs
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://auth.fgv.local.nu:8443/auth/realms/fgv
       SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_FGV_TOKEN_URI: http://keycloak-server:8080/auth/realms/fgv/protocol/openid-connect/token
+    volumes:
+      - ./.docker/sample-data:/sample-data
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep -q \"^HTTP/1.1 200\" <&3" ]
