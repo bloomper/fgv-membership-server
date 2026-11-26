@@ -40,12 +40,49 @@ public class PaymentMails {
     private final Mailer mailer;
     private final PaymentProperties properties;
     private final String webUrl;
+    private final java.util.List<String> adminRecipients;
 
     public PaymentMails(final Mailer mailer, final PaymentProperties properties,
-                        @org.springframework.beans.factory.annotation.Value("${membership.web-url}") final String webUrl) {
+                        @org.springframework.beans.factory.annotation.Value("${membership.web-url}") final String webUrl,
+                        @org.springframework.beans.factory.annotation.Value("${membership.registration.notify-recipients:}") final java.util.List<String> adminRecipients) {
         this.mailer = mailer;
         this.properties = properties;
         this.webUrl = webUrl;
+        this.adminRecipients = adminRecipients.stream().map(String::strip).filter(recipient -> !recipient.isEmpty()).toList();
+    }
+
+    /**
+     * What happened that the administrators are told about.
+     */
+    public enum Event {
+        /** A member says they have paid; the treasurer has to find the payment */
+        REPORTED,
+        /** The shop told that someone paid; the membership counts already */
+        ONLINE,
+        /** The shop told about a payment from someone who already was a member that year; a refund may be due */
+        ALREADY_MEMBER
+    }
+
+    /**
+     * Tells the administrators that a payment was made or reported, whether by "I have paid" or from the shop.
+     *
+     * @param payer     who paid, by name
+     * @param reference the payment request's reference, or the shop's order when nothing was recorded
+     * @param years     what it is for
+     * @param note      who paid on their behalf, or the shop's order, or null
+     */
+    public void adminNotice(final Event event, final String payer, final int amount, final String reference, final String years, final String note) {
+        final String key = event.name().toLowerCase(Locale.ROOT);
+        final String extra = note == null || note.isBlank() ? "" : mailer.text(LOCALE, "mail.payment.admin.note", note);
+
+        for (final String recipient : adminRecipients) {
+            try {
+                mailer.send(recipient, mailer.text(LOCALE, "mail.payment.admin." + key + ".subject", payer, amount),
+                        mailer.text(LOCALE, "mail.payment.admin." + key + ".body", payer, amount, reference, years, extra, webUrl + "/treasurer/payments"));
+            } catch (final MailException e) {
+                log.error("Could not tell {} about a payment from {}", recipient, payer, e);
+            }
+        }
     }
 
     public void reminder(final Spexare spexare, final PaymentView request) {

@@ -151,8 +151,11 @@ public class PaymentService {
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
                                                          final int amount, final LocalDate paidOn, final String note) {
+        final String payer = spexregister.byIds(List.of(spexareId)).stream().findFirst().map(Spexare::name).orElse(spexareId);
+
         if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(properties.membershipType())
                 && existing.counts() && (existing.isLifetime() && existing.getYear() <= year || existing.getYear() == year))) {
+            mails.adminNotice(PaymentMails.Event.ALREADY_MEMBER, payer, amount, note, String.valueOf(year), note);
             return java.util.Optional.empty();
         }
 
@@ -167,6 +170,7 @@ public class PaymentService {
         final PaymentView view = view(request, null);
 
         spexregister.byIds(List.of(spexareId)).forEach(spexare -> mails.receipt(spexare, view));
+        mails.adminNotice(PaymentMails.Event.ONLINE, payer, amount, view.reference(), years(view), note);
         return java.util.Optional.of(view);
     }
 
@@ -185,7 +189,12 @@ public class PaymentService {
         }
         request.report(paidBy == null || paidBy.isBlank() ? null : paidBy.strip(), clock.instant());
         request.getMembershipIds().forEach(id -> memberships.setStatus(id, MembershipStatus.REPORTED, null, null));
-        return view(request, null);
+
+        final PaymentView view = view(request, null);
+
+        mails.adminNotice(PaymentMails.Event.REPORTED, spexareOf(userId).name(), view.amount(), view.reference(), years(view),
+                request.getPaidBy() == null ? null : "Betalat av " + request.getPaidBy());
+        return view;
     }
 
     /**
@@ -282,6 +291,11 @@ public class PaymentService {
                 .stream().collect(Collectors.toMap(Spexare::id, Function.identity()));
 
         return open.stream().map(request -> view(request, spexare.get(request.getSpexareId()))).toList();
+    }
+
+    private static String years(final PaymentView view) {
+        return view.memberships().stream().map(item -> item.lifetime() ? "livstid från " + item.year() : String.valueOf(item.year()))
+                .collect(Collectors.joining(", "));
     }
 
     private PaymentRequest find(final String id) {

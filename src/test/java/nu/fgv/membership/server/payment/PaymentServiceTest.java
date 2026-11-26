@@ -256,4 +256,38 @@ class PaymentServiceTest {
         assertThatThrownBy(() -> service.get("other", made.id(), false)).isInstanceOf(AccessDeniedException.class);
         assertThat(service.get("other", made.id(), true).spexareName()).isEqualTo("Greta Garbo");
     }
+
+    @Test
+    void theAdministratorsAreToldWhenSomeoneSaysTheyHavePaid() {
+        final PaymentView made = service.request(USER, List.of(ordinary2026.getId()));
+
+        service.report(USER, made.id(), "Partner Garbo");
+
+        verify(mails).adminNotice(eq(PaymentMails.Event.REPORTED), eq("Greta Garbo"), eq(200), eq(made.reference()), eq("2026"),
+                eq("Betalat av Partner Garbo"));
+    }
+
+    @Test
+    void theAdministratorsAreToldWhenTheShopReportsAPayment() {
+        final var view = service.recordExternal("shop", SPEXARE, 2026, false, 200, LocalDate.of(2026, 11, 25), "Online: order-1");
+
+        assertThat(view).isPresent();
+        assertThat(view.get().status()).isEqualTo(PaymentStatus.MATCHED);
+        assertThat(view.get().memberships()).extracting(PaymentView.Item::status).containsOnly("PAID");
+        verify(mails).receipt(eq(spexare), any(PaymentView.class));
+        verify(mails).adminNotice(eq(PaymentMails.Event.ONLINE), eq("Greta Garbo"), eq(200), eq(view.get().reference()), eq("2026"), eq("Online: order-1"));
+    }
+
+    @Test
+    void aShopPaymentFromSomeoneAlreadyAMemberIsReportedToTheAdministratorsAndNotRecorded() {
+        final Membership paid = new Membership(SPEXARE, "FGV", 2026, clock.instant());
+
+        paid.update(false, MembershipStatus.PAID, MembershipHow.SWISH, null, clock.instant());
+        memberships.put(paid.getId(), paid);
+
+        assertThat(service.recordExternal("shop", SPEXARE, 2026, false, 200, LocalDate.of(2026, 11, 25), "Online: order-2")).isEmpty();
+
+        verify(mails).adminNotice(eq(PaymentMails.Event.ALREADY_MEMBER), eq("Greta Garbo"), eq(200), eq("Online: order-2"), eq("2026"), eq("Online: order-2"));
+        verify(payments, never()).save(any());
+    }
 }
