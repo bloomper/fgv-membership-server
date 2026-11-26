@@ -65,7 +65,7 @@ class PaymentSettingsTest {
 
     @Test
     void whatAnAdminSavesWinsAndAnEmptyValueGoesBackToTheConfiguration() {
-        settings.save("070 999 99 99", "555-5555", "", 5, "x@fgv.nu, y@fgv.nu\nz@fgv.nu");
+        settings.save("070 999 99 99", "555-5555", "", "", 5, "x@fgv.nu, y@fgv.nu\nz@fgv.nu");
 
         assertThat(settings.swishNumber()).isEqualTo("070 999 99 99");
         assertThat(settings.bankgiro()).isEqualTo("555-5555");
@@ -73,7 +73,7 @@ class PaymentSettingsTest {
         assertThat(settings.reminderAfter()).isEqualTo(Duration.ofDays(5));
         assertThat(settings.notifyRecipients()).containsExactly("x@fgv.nu", "y@fgv.nu", "z@fgv.nu");
 
-        settings.save("", "", "", 3, "");
+        settings.save("", "", "", "", 3, "");
 
         assertThat(settings.swishNumber()).isEqualTo("070 111 22 33");
         assertThat(settings.bankgiro()).isEqualTo("123-4567");
@@ -88,8 +88,8 @@ class PaymentSettingsTest {
 
     @Test
     void invalidValuesAreRefused() {
-        assertThatThrownBy(() -> settings.save("1", "2", "3", 0, "")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> settings.save("1", "2", "3", 61, "")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> settings.save("1", "2", "3", 3, "not-an-address")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> settings.save("1", "2", "3", "4", 0, "")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> settings.save("1", "2", "3", "4", 61, "")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> settings.save("1", "2", "3", "4", 3, "not-an-address")).isInstanceOf(IllegalArgumentException.class);
     }
 }
