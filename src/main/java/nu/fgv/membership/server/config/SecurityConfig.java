@@ -56,6 +56,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/registration", "/api/registration/verify").permitAll()
                         .requestMatchers("/api/personal/**").permitAll()
+                        // The API guide and the Javadoc
+                        .requestMatchers(HttpMethod.GET, "/docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
         return http.build();
@@ -64,6 +66,12 @@ public class SecurityConfig {
     @Bean
     public OAuth2TokenValidator<Jwt> authorizedPartyValidator(final MembershipProperties properties) {
         return new JwtClaimValidator<String>("azp", properties.security().authorizedParties()::contains);
+    }
+
+    /** Only access tokens: Keycloak's ID and refresh tokens are signed by the same keys. */
+    @Bean
+    public OAuth2TokenValidator<Jwt> accessTokenTypeValidator() {
+        return new JwtClaimValidator<String>("typ", "Bearer"::equals);
     }
 
     @Bean

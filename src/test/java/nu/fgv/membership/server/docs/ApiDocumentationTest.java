@@ -151,7 +151,7 @@ class ApiDocumentationTest {
     }
 
     private PersonalLinkController personalController() {
-        return new PersonalLinkController(personal, clock, null);
+        return new PersonalLinkController(personal, clock);
     }
 
     @Test

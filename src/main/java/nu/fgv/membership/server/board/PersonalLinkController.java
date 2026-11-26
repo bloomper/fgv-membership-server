@@ -17,7 +17,7 @@
 package nu.fgv.membership.server.board;
 
 import jakarta.servlet.http.HttpServletRequest;
-import nu.fgv.membership.server.config.MembershipProperties;
+import nu.fgv.membership.server.registration.RateLimiter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,11 +43,11 @@ import java.util.Map;
 public class PersonalLinkController {
 
     private final PersonalLinkService service;
-    private final nu.fgv.membership.server.registration.RateLimiter limiter;
+    private final RateLimiter limiter;
 
-    public PersonalLinkController(final PersonalLinkService service, final Clock clock, final MembershipProperties properties) {
+    public PersonalLinkController(final PersonalLinkService service, final Clock clock) {
         this.service = service;
-        this.limiter = new nu.fgv.membership.server.registration.RateLimiter(120, Duration.ofHours(1), clock);
+        this.limiter = new RateLimiter(120, Duration.ofHours(1), clock);
     }
 
     public record Report(String paidBy) {

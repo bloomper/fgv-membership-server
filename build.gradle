@@ -103,7 +103,7 @@ dependencyManagement {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ['-Xlint:all,-processing,-serial']
+    options.compilerArgs += ['-Xlint:all,-processing,-serial', '-Werror']
 }
 
 javadoc {
@@ -116,7 +116,7 @@ javadoc {
         charSet 'UTF-8'
         author true
         version true
-        failOnError false
+        failOnError true
     }
 }
 
@@ -213,4 +213,25 @@ jib {
     container {
         user = '1000:1000'
     }
+    // The documentation is served from /docs, as from the boot jar
+    extraDirectories {
+        paths {
+            path {
+                from = "${asciidoctor.outputDir}"
+                into = "/app/resources/static/docs"
+            }
+            path {
+                from = "${javadoc.destinationDir}"
+                into = "/app/resources/static/docs/javadoc"
+            }
+        }
+    }
+}
+
+tasks.named('jib') {
+    dependsOn asciidoctor, javadoc
+}
+
+jibDockerBuild {
+    dependsOn asciidoctor, javadoc
 }

@@ -18,7 +18,6 @@ package nu.fgv.membership.server.membership;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,9 +32,4 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     Optional<Membership> findById(String id);
 
     List<Membership> findBySpexareId(String spexareId);
-
-    /**
-     * @return the (spexare, year) pairs among the given spexare that already have a membership of the type
-     */
-    List<Membership> findByTypeAndSpexareIdIn(String type, Collection<String> spexareIds);
 }

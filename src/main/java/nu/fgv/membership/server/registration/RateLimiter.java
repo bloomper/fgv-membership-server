@@ -23,6 +23,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Counts events per key over a sliding window, in memory. Medlemskap runs as one instance; the limit is a second line of
@@ -37,11 +38,13 @@ public class RateLimiter {
     private final int limit;
     private final Duration window;
     private final Clock clock;
+    private final AtomicReference<Instant> lastEviction;
 
     public RateLimiter(final int limit, final Duration window, final Clock clock) {
         this.limit = limit;
         this.window = window;
         this.clock = clock;
+        this.lastEviction = new AtomicReference<>(clock.instant());
     }
 
     /**
@@ -49,6 +52,8 @@ public class RateLimiter {
      */
     public boolean tryAcquire(final String key) {
         final Instant now = clock.instant();
+
+        evictIdle(now);
         final Deque<Instant> times = events.computeIfAbsent(key, k -> new ArrayDeque<>());
 
         synchronized (times) {
@@ -61,5 +66,31 @@ public class RateLimiter {
             times.addLast(now);
             return true;
         }
+    }
+
+    /**
+     * @return how many keys are remembered
+     */
+    int trackedKeys() {
+        return events.size();
+    }
+
+    /**
+     * Forgets keys with no event in the window, so that keys made up by a caller (an email address each time) cannot
+     * fill the memory. Done at most once per window.
+     */
+    private void evictIdle(final Instant now) {
+        final Instant last = lastEviction.get();
+
+        if (now.isBefore(last.plus(window)) || !lastEviction.compareAndSet(last, now)) {
+            return;
+        }
+        final Instant cutoff = now.minus(window);
+
+        events.entrySet().removeIf(entry -> {
+            synchronized (entry.getValue()) {
+                return entry.getValue().isEmpty() || entry.getValue().peekLast().isBefore(cutoff);
+            }
+        });
     }
 }

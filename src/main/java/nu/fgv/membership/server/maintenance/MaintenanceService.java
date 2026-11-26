@@ -70,7 +70,7 @@ public class MaintenanceService {
         add("BANK_CLEANUP", "Remove unmatched bank transactions after 90 days and dismissed ones' fingerprints after a year", bank::removeOld);
         add("UNVERIFIED_REGISTRATIONS", "Remove accounts whose email address was never confirmed", registrations::removeUnverified);
         add("APPLICATION_CLEANUP", "Remove applications decided more than 12 months ago", applications::removeOld);
-        add("EXPIRED_PERSONAL_LINKS", "Remove personal links that have expired", this::removeExpiredLinks);
+        add("EXPIRED_PERSONAL_LINKS", "Remove personal links that have expired", () -> Math.toIntExact(links.deleteByExpiresAtBefore(clock.instant())));
     }
 
     private void add(final String name, final String description, final IntSupplier action) {
@@ -116,10 +116,6 @@ public class MaintenanceService {
      */
     void record(final String name, final String result) {
         settings.save(new AppSetting("job." + name, clock.instant() + "|" + result));
-    }
-
-    int removeExpiredLinks() {
-        return Math.toIntExact(links.deleteByExpiresAtBefore(clock.instant()));
     }
 
     @Scheduled(cron = "${membership.jobs.retention.cron-expression:0 50 3 * * *}", zone = "Europe/Stockholm")

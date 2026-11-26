@@ -58,4 +58,18 @@ class RateLimiterTest {
 
         assertThat(limiter.tryAcquire("a")).isTrue();
     }
+
+    @Test
+    void forgets_keys_that_have_been_idle_for_a_window() {
+        final RateLimiter limiter = new RateLimiter(2, Duration.ofHours(1), clock);
+
+        limiter.tryAcquire("a");
+        limiter.tryAcquire("b");
+        assertThat(limiter.trackedKeys()).isEqualTo(2);
+
+        now = now.plus(Duration.ofMinutes(61));
+        limiter.tryAcquire("c");
+
+        assertThat(limiter.trackedKeys()).isEqualTo(1);
+    }
 }

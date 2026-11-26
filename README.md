@@ -8,24 +8,50 @@ Keycloak.
 
 ## What is here
 
-Only the accounts part of the spec (sections 5.11 and 5.12) so far:
-
 | Package        | What it does                                                                                              |
 |----------------|-----------------------------------------------------------------------------------------------------------|
 | `registration` | `POST /api/registration` (Turnstile, rate limits, creates the user in Keycloak, sends the verification link) and `POST /api/registration/verify`. Removes accounts never verified |
 | `access`       | Which applications a user may use and with which roles; `RoleLadder` makes `ADMIN` include `EDITOR` and `USER`; the audit of changes |
 | `admin`        | GraphQL for administrators (`ADMIN`): list, find, activate, deactivate, reject, edit, set access and roles |
 | `keycloak`     | Keycloak's admin REST API, with `fgv-membership-service`                                                  |
-| `mail`         | The emails Keycloak's `fgv-admin-notification` used to send: approval, first access, rejection, new user |
+| `mail`         | The emails Keycloak's `fgv-admin-notification` used to send, and the payment mails                        |
+| `membership`   | Memberships per spexare and year, and the feed Spexregister pulls (`SYNC`)                                 |
+| `payment`      | Fees, payment requests and payments (Swish, bankgiro, bank transfer), reminders, revival requests         |
+| `bank`         | Import of bank statements, matching of transactions to payment requests (`TREASURER`)                       |
+| `board`        | Members, renewals, personal payment links (`/api/personal`, public: the token is the key), Excel exports  |
+| `application`  | Applications for a membership, decided by the board                                                        |
+| `external`     | What other applications call: `/api/external/payments` and `/api/external/lookup` (`PAYMENT`), default access |
+| `maintenance`  | The scheduled jobs, which an administrator can also run on demand                                          |
 
-Memberships, payments and the rest of the spec follow in later milestones.
+The API guide (REST Docs and the GraphQL guide) is served from `/docs` and built from `src/main/asciidoc`.
 
 ## Running
 
 ```shell
-./gradlew test
-SPRING_PROFILES_ACTIVE=local ./gradlew bootRun   # needs MySQL and Keycloak, see fgv-membership-deploy
+./gradlew test                # unit tests
+./gradlew integrationTest     # needs Docker: MySQL and Keycloak in Testcontainers
+./gradlew check               # both, with coverage
+SPRING_PROFILES_ACTIVE=local ./gradlew bootRun   # needs MySQL and Keycloak, see Local stack
 ```
+
+## Local stack
+
+Like the other FGV servers, this one has a `docker-compose.yaml` that runs next to `fgv-infra-deploy`'s local stack
+(Keycloak, Mailpit and the proxy on the Docker network `fgv-local`):
+
+```shell
+scripts/init-secrets.sh          # random database passwords in .docker/secrets (the placeholders are CHANGE_ME)
+scripts/configure-keycloak.sh    # copies the secret of fgv-membership-service from the local Keycloak, and tells
+                                 # the web's .env.local about the fgv-membership client
+docker compose up -d             # MySQL and the API image; the API is reached at https://api.membership.fgv.local.nu:8443
+```
+
+To run the API from the IDE instead, publish MySQL's port by uncommenting `ports` in `docker-compose.yaml`, start only
+`membership-mysql`, and run the `local` profile (port 8090, management port 9010) with
+`SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3309/membership` and the user and password of `.docker/secrets`. The
+proxy sends `api.membership.fgv.local.nu` to the container, or to port 8090 on the host when the container is not up.
+The secret files are committed as placeholders (`git update-index --skip-worktree` is done by the scripts), and
+`.docker` is otherwise ignored, so a new secret file is added with `git add -f`.
 
 ## Configuration
 
@@ -35,6 +61,8 @@ SPRING_PROFILES_ACTIVE=local ./gradlew bootRun   # needs MySQL and Keycloak, see
 | `API_KEYCLOAK_SERVICE_CLIENT_SECRET` | The secret of `fgv-membership-service`                                             |
 | `API_TURNSTILE_SECRET_KEY`         | Turnstile's secret key. **Without it registration is refused**; the `local` profile skips the check. Cloudflare's test secret `1x0000000000000000000000000000000AA` always passes, `2x0000000000000000000000000000000AA` always fails |
 | `API_REGISTRATION_NOTIFY_RECIPIENTS` | Comma-separated emails told when a new user has verified their address             |
+| `API_SECURITY_AUTHORIZED_PARTIES`  | Clients (`azp`) whose access tokens are accepted: the web and the applications that call the API |
+| `API_PAYMENT_*`, `API_SPEXREGISTER_GRAPHQL_URL`, `API_SYNC_NOTIFY_URLS`, `API_DEFAULT_ACCESS_EXCLUDED` | Where members pay, and the neighbouring applications |
 | `API_WEB_URL`                      | Medlemskap Web, used in links in emails                                              |
 | `SMTP_*`, `API_MAIL_FROM`          | The mail relay                                                                       |
 | `MYSQL_API_USER_PASSWORD`          | Database password; also read from `/run/secrets`                                     |
