@@ -1,0 +1,132 @@
+= Medlemskap Server Getting Started Guide
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+:toc: left
+:toclevels: 3
+
+[[requirements]]
+== Requirements
+
+* Java 25
+* MySQL 8.4 (the schema is made by Flyway at startup)
+* Keycloak with the realm of `fgv-keycloak`: the clients `fgv-membership` (the web) and `fgv-membership-service` (this
+  server's own, for Keycloak's admin API and for reading Spexregister), and the service clients of the applications that call
+  this one
+* An SMTP relay: Medlemskap sends the registration, approval, payment and reminder emails itself
+* Spexregister, which knows who the spexare are
+* Docker, for the integration tests (they start MySQL and Keycloak in containers)
+
+[[configuration]]
+== Configuration
+
+Settings come from `application.yml`, environment variables and Docker secrets (`/run/secrets/<name>`, read as properties).
+
+[cols="1,3"]
+|===
+|Variable |What it is
+
+|`API_KEYCLOAK_URL`, `API_KEYCLOAK_REALM`
+|Keycloak's address (including `/auth` when it has that prefix) and the realm
+
+|`API_KEYCLOAK_SERVICE_CLIENT_ID`, `API_KEYCLOAK_SERVICE_CLIENT_SECRET`
+|`fgv-membership-service` and its secret (it needs the `realm-management` roles for users and the `kc-admin-api` scope)
+
+|`API_SPEXREGISTER_GRAPHQL_URL`
+|Spexregister's GraphQL API; this server holds the `MEMBERSHIP` role there
+
+|`API_SYNC_NOTIFY_URLS`
+|Addresses told after each change to a membership (Spexregister's `/api/sync/notify`); empty relies on its pulls
+
+|`API_WEB_URL`
+|Medlemskap Web's address, for links in emails
+
+|`API_TURNSTILE_SECRET_KEY`
+|Cloudflare Turnstile's secret; without it registration is refused (the `local` profile skips the check)
+
+|`API_REGISTRATION_NOTIFY_RECIPIENTS`
+|Who is emailed about payments and new registrations until an administrator sets it under *Settings*
+
+|`API_PAYMENT_SWISH_NUMBER`, `API_PAYMENT_BANKGIRO`, `API_PAYMENT_BANK_ACCOUNT`, `API_PAYMENT_PAYEE_NAME`
+|Where members pay, until an administrator sets it under *Settings*. The bank account is for direct transfers and may be
+left empty
+
+|`API_SECURITY_AUTHORIZED_PARTIES`
+|The Keycloak clients whose tokens are accepted (`azp`): the web, Spexregister's and Nyuppsättning's service clients and
+`fgv-external-payment-service`; another application that tells about payments is added here
+
+|`API_DEFAULT_ACCESS_EXCLUDED`
+|Applications that accounts made from payments elsewhere get no access to (`fgv-revival`)
+
+|`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
+|The mail relay
+|===
+
+The applications whose users are administered, and the roles of each (lowest first), are `membership.applications` in
+`application.yml`. Keycloak's roles are not composite, so this server makes them a ladder: giving a role gives the ones
+below it, and taking one away takes the ones above. Service roles (`SYNC`, `NOTIFY`, `PAYMENT`, ...) are never listed.
+
+[[running]]
+== Running it
+
+[source,shell]
+----
+./gradlew bootRun --args='--spring.profiles.active=local'
+----
+
+The GraphQL endpoint is `https://<host>/api/graphql`; health and metrics are on the management port, `9000`. The database
+needs only an empty schema: Flyway creates the tables (`src/main/resources/db/migration`).
+
+[[tests]]
+== Tests
+
+[cols="1,3"]
+|===
+|`./gradlew test`
+|Unit tests, and the REST Docs tests whose snippets this guide includes
+
+|`./gradlew integrationTest`
+|The whole application against MySQL and Keycloak (with a copy of `fgv-keycloak`'s realm) in Testcontainers, a real SMTP
+server (GreenMail) and WireMock for Spexregister. Tests log in as real users and call the GraphQL API and the HTTP
+endpoints; they need Docker
+
+|`./gradlew asciidoctor`
+|Builds these guides into `build/docs/asciidoc`; `bootJar` puts them under `/docs`
+|===
+
+The web has its own unit tests (`npm test`) and end-to-end tests with Playwright (`npm run test:e2e`).
+
+[[image]]
+== Docker image
+
+`./gradlew jib` builds and pushes `bloomper/fgv-membership-server`. Deployment is in `fgv-membership-deploy`.
+
+[[roles]]
+== Roles
+
+Client roles on `fgv-membership`:
+
+[cols="1,3"]
+|===
+|`USER`
+|Every approved user: sees their own membership, pays, applies
+
+|`BOARD`
+|Includes `USER`: members and their counts, renewal reminders, waivers, applications, family members, the member list as Excel
+
+|`TREASURER`
+|Includes `BOARD`: records payments, imports and matches bank statements, undoes payments, the year's payments as Excel
+
+|`ADMIN`
+|Includes `TREASURER`: users and their access, fees, settings, bank formats, default access, maintenance, the audit log
+
+|`SYNC`
+|Service role for Spexregister: the membership feed, and telling that a spexare was deleted
+
+|`REVIVAL`
+|Service role for Nyuppsättning: the year's fees and payment requests for its participants
+
+|`PAYMENT`
+|Service role for other applications that take payments: telling that someone paid, and asking whether an address has an
+account and a membership
+|===

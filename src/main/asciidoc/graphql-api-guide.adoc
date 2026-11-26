@@ -1,0 +1,103 @@
+= Medlemskap Server GraphQL API Guide
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+:toc: left
+:toclevels: 3
+
+[[schema]]
+== Schema
+
+The schema is in `src/main/resources/graphql/*.graphqls`; each field says who may call it. The endpoint is
+`POST /api/graphql` with an access token from Keycloak (`Authorization: Bearer ...`); a request without one is answered
+`401`. Amounts are whole kronor (`Int`). Dates and times are strings (`yyyy-mm-dd`, ISO 8601).
+
+[[errors]]
+== Errors
+
+Errors carry `extensions.classification`: `UNAUTHORIZED`, `FORBIDDEN` (the caller's role is too low), `BAD_REQUEST`
+(e.g. a refused role or a fee that does not exist) or `INTERNAL_ERROR`. The message says why, e.g. that the last
+administrator cannot be demoted, or that someone is a member for the year already.
+
+[[memberships]]
+== Memberships and paying
+
+A membership is one spexare's FGV membership for a year, or for life from a first year. Only `PAID` and `WAIVED` count. There
+are four kinds of fee, each with a price for each year (set by an administrator): `STANDARD` (one person), `FAMILY` (one
+family: the payer and every family member get the membership), `LIFETIME` (once) and `SUPPORT` (a support membership,
+*stödmedlemskap*, which gives other access).
+
+[cols="2,3"]
+|===
+|`myMembership`, `feeLevels`, `paymentRequest`
+|Members read their memberships, the fees they may pick and a payment request, which also has the Swish link and a QR code
+
+|`requestPayment`, `reportPaid`
+|A member asks to pay (one fee for each year, or the life fee; `familyNote` says who is in a family) and says that they have
+paid, perhaps someone else on their behalf
+
+|`waitingPaymentRequests`, `recordPayment`, `cancelPaymentRequest`, `paymentsThisYear`, `undoPayment`
+|`TREASURER`: requests that wait, recording that money arrived (a part payment leaves the request open, more is a gift),
+dropping a request, this year's payments and undoing one in the year it was recorded
+
+|`recordPaymentWithoutRequest`
+|`TREASURER`: a payment that had no request: the request is made and paid at once
+
+|`addFamilyMembers`
+|`BOARD`: gives the people of a family the membership that a family request pays for
+|===
+
+A payment request has a *reference*: `FGV`, the year's last two digits and four characters from an alphabet without
+look-alikes, the last of which is a check character (e.g. `FGV27K7QX`). Members pay with Swish or to the bankgiro with the
+reference as the message; a direct bank transfer to the bank account is allowed.
+
+[[bank]]
+== Bank statements
+
+`TREASURER`. An administrator describes each bank's CSV once (`bankFormats`, `bankFormatSave`, `bankFormatDelete`). Then
+`importStatement` takes a file's text: incoming transactions are kept, new ones only, and those with a valid reference whose
+amount covers the request are matched at once. `unmatchedTransactions`, `transactionSuggestions` (same amount and a
+payer who resembles the member, or a mistyped reference), `matchTransaction` (one request, or several that were paid
+together) and `dismissTransaction` do the rest. A file with a row that cannot be read imports nothing.
+
+[[board]]
+== The board
+
+`BOARD`: `members` (a year's members with filters), `memberTrend`, `memberDetail`, `spexareSearch`, `renewalPreview` and
+`sendRenewals` (a payment request and a personal link to last year's members who have nothing for the year),
+`grantWaiver` (a membership without a fee, with a note), `sendPaymentLink`, and the applications for membership:
+`membershipApplications`, `acceptApplication` (links the account to the spexare, or has one created), `rejectApplication`.
+A user whose account is not linked to a spexare applies with `applyForMembership` and reads `myApplication`.
+
+[[users]]
+== Users and access
+
+`ADMIN`. `users`, `user`, `applications` (the administered applications and their roles), `setApplicationAccess` (the highest
+role on an application; `notify` says whether the user is emailed, for that update only), `setUserEnabled`, `rejectUser`,
+`updateUser`, `resendVerification`, `sendSetPasswordEmail` and `sendPasswordResetEmail`. An administrator cannot demote or
+deactivate themselves, and the last administrator cannot be demoted or deactivated.
+
+`defaultAccess` and `setDefaultAccess` keep the access a new account gets when it is made from a payment in another
+application: one set for the full memberships (`MEMBER`) and one for support memberships (`SUPPORT`).
+
+[[administration]]
+== Administration
+
+`ADMIN`: `settings` and `saveSettings` (Swish number, bankgiro, bank account, payee, days before a reminder, who is
+emailed), `allFeeLevels`, `feeLevelSave`, `feeLevelRetire`, `maintenanceJobs`, `runMaintenanceJob` and `auditLog`.
+
+[[feed]]
+== The membership feed
+
+`membershipChanges(after, first)` lists changes to memberships that count, oldest first, each with the membership as it was
+right after the change (`UPSERT`, or `DELETE` when it no longer counts). Apply them in order and keep `cursor`, passing it
+as `after` the next time. The caller needs `SYNC`; asking for a page tells Medlemskap that the caller has read up to
+`after`. After each change Medlemskap calls the consumers' notify addresses (`API_SYNC_NOTIFY_URLS`); the call carries no
+data.
+
+[[revival]]
+== Payments by a revival
+
+`REVIVAL`: `revivalFeeLevels` and `createRevivalPaymentRequest(payerLabel, spexareIds, feeLevelId)`: one request that covers
+the year's standard fee for the participants. Those who are members already are left out and listed. The treasurer matches
+the payment as usual, and the memberships become paid with the revival as the payer.

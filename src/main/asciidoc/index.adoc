@@ -1,0 +1,34 @@
+= Medlemskap Server
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+
+[[introduction]]
+== Introduction
+
+Medlemskap Server is the backend of Medlemskap, FGV's application for its memberships: who is a member which year, what
+they paid and how, who has an account and what it may use. It is the master of FGV memberships; Spexregister keeps a
+read-only copy that it reads from the change feed. Names and contact details of members stay in Spexregister and are read
+when they are needed. Keycloak is the identity provider: Medlemskap administers its users through the admin API but
+never holds a password.
+
+[[getting_started]]
+== Getting started
+
+Refer to the xref:getting-started.adoc[getting started guide].
+
+[[graphql_api_guide]]
+== GraphQL API guide
+
+Refer to the xref:graphql-api-guide.adoc[GraphQL API guide].
+
+[[http_api_guide]]
+== HTTP API guide
+
+Refer to the xref:api-guide.adoc[HTTP API guide]: registration, personal payment links, what other applications call, the
+Excel exports and the notice from Spexregister.
+
+[[javadoc]]
+== Javadoc
+
+Javadoc can be found link:javadoc/index.html[here].
