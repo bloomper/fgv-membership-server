@@ -59,6 +59,7 @@ import static org.mockito.Mockito.when;
 class ExternalPaymentServiceTest {
 
     private static final String SHOP = "shop-service";
+    private static final String SOURCE = "fgv-external-payment-service";
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-26T10:00:00Z"), ZoneOffset.UTC);
     private final FakeKeycloakAdmin keycloak = new FakeKeycloakAdmin()
@@ -105,13 +106,13 @@ class ExternalPaymentServiceTest {
         });
         defaults = new DefaultAccessService(defaultRepository, settings, catalog, access, properties, List.of("fgv-revival"), List.of("fgv-spexregister"));
 
-        when(externals.findByExternalRef(anyString())).thenAnswer(call -> Optional.ofNullable(told.get(call.<String>getArgument(0))));
+        when(externals.findBySourceAndExternalRef(anyString(), anyString())).thenAnswer(call -> Optional.ofNullable(told.get(call.<String>getArgument(1))));
         when(externals.save(any(ExternalPayment.class))).thenAnswer(call -> call.getArgument(0));
         when(spexregister.byEmail(anyString())).thenReturn(Optional.empty());
         when(spexregister.create(anyString(), anyString(), anyString())).thenReturn(new Spexare("sp-1", "Greta", "Garbo", "greta@example.org"));
-        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString()))
+        when(payments.recordExternal(anyString(), any(), any(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString()))
                 .thenReturn(Optional.of(new PaymentView("req-1", "FGV26ABCD", 200, PaymentStatus.MATCHED, clock.instant(), null, null, "sp-1", null,
-                        List.of(), null, null, 200, null, false, false)));
+                        List.of(), null, null, 200, null, false, false, null, null)));
 
         service = new ExternalPaymentService(externals, spexregister, keycloak, defaults, payments, mails, mock(PlatformTransactionManager.class), clock);
     }
@@ -122,7 +123,7 @@ class ExternalPaymentServiceTest {
 
     @Test
     void aPaymentFromSomeoneNewCreatesTheSpexareTheAccountAndTheMembership() {
-        final var result = service.record(SHOP, request("Greta@Example.org", "order-1"));
+        final var result = service.record(SHOP, SOURCE, request("Greta@Example.org", "order-1"));
 
         assertThat(result.status()).isEqualTo(ExternalPaymentService.Status.RECORDED);
         assertThat(result.accountCreated()).isTrue();
@@ -131,13 +132,13 @@ class ExternalPaymentServiceTest {
         final KeycloakUser user = keycloak.findUserByEmail("greta@example.org").orElseThrow();
 
         assertThat(user.emailVerified()).isTrue();
-        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(false), eq(false), eq(200), eq(LocalDate.of(2026, 11, 25)), eq("Online: order-1"));
+        verify(payments).recordExternal(eq(SHOP), eq(SOURCE), eq("order-1"), eq("sp-1"), eq(2026), eq(false), eq(false), eq(200), eq(LocalDate.of(2026, 11, 25)), eq("Online: " + SOURCE + " order-1"));
         verify(mails).accountCreated(user.id(), "greta@example.org");
     }
 
     @Test
     void theNewAccountGetsTheDefaultAccessAndALinkToChooseAPassword() {
-        service.record(SHOP, request("greta@example.org", "order-1"));
+        service.record(SHOP, SOURCE, request("greta@example.org", "order-1"));
 
         final KeycloakUser user = keycloak.findUserByEmail("greta@example.org").orElseThrow();
 
@@ -154,7 +155,7 @@ class ExternalPaymentServiceTest {
         defaults.set("fgv-membership", null);
         defaults.set("fgv-revival", "USER");
 
-        service.record(SHOP, request("greta@example.org", "order-1"));
+        service.record(SHOP, SOURCE, request("greta@example.org", "order-1"));
 
         final KeycloakUser user = keycloak.findUserByEmail("greta@example.org").orElseThrow();
 
@@ -186,7 +187,7 @@ class ExternalPaymentServiceTest {
 
         when(spexregister.byEmail("greta@example.org")).thenReturn(Optional.of(new Spexare("sp-1", "Greta", "Garbo", "greta@example.org")));
 
-        final var result = service.record(SHOP, request("greta@example.org", "order-1"));
+        final var result = service.record(SHOP, SOURCE, request("greta@example.org", "order-1"));
 
         assertThat(result.accountCreated()).isFalse();
         assertThat(keycloak.rolesOf(existing.id(), "fgv-spexregister")).isEmpty();
@@ -197,20 +198,20 @@ class ExternalPaymentServiceTest {
 
     @Test
     void tellingTheSameOrderTwiceChangesNothing() {
-        told.put("order-1", new ExternalPayment(SHOP, "order-1", "req-1", "RECORDED", true, clock.instant()));
+        told.put("order-1", new ExternalPayment(SHOP, SOURCE, "order-1", "req-1", "RECORDED", true, clock.instant()));
 
-        final var result = service.record(SHOP, request("greta@example.org", "order-1"));
+        final var result = service.record(SHOP, SOURCE, request("greta@example.org", "order-1"));
 
         assertThat(result.status()).isEqualTo(ExternalPaymentService.Status.DUPLICATE);
-        verify(payments, never()).recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString());
+        verify(payments, never()).recordExternal(anyString(), any(), any(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString());
         assertThat(keycloak.users.values()).noneMatch(user -> "greta@example.org".equals(user.email()));
     }
 
     @Test
     void someoneWhoIsAlreadyAMemberThatYearIsReportedAndNothingIsRecorded() {
-        when(payments.recordExternal(anyString(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString())).thenReturn(Optional.empty());
+        when(payments.recordExternal(anyString(), any(), any(), anyString(), anyInt(), anyBoolean(), anyBoolean(), anyInt(), any(), anyString())).thenReturn(Optional.empty());
 
-        final var result = service.record(SHOP, request("greta@example.org", "order-2"));
+        final var result = service.record(SHOP, SOURCE, request("greta@example.org", "order-2"));
 
         assertThat(result.status()).isEqualTo(ExternalPaymentService.Status.ALREADY_MEMBER);
         assertThat(result.reference()).isNull();
@@ -223,24 +224,42 @@ class ExternalPaymentServiceTest {
         doThrow(new IllegalStateException("mail down")).when(failing).accountCreated(anyString(), anyString());
         service = new ExternalPaymentService(externals, spexregister, keycloak, defaults, payments, failing, mock(PlatformTransactionManager.class), clock);
 
-        assertThatThrownBy(() -> service.record(SHOP, request("greta@example.org", "order-1"))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, request("greta@example.org", "order-1"))).isInstanceOf(IllegalStateException.class);
         assertThat(keycloak.findUserByEmail("greta@example.org")).isEmpty();
     }
 
     @Test
+    void theApplicationsOwnPaymentIdIsKeptWithThePaymentAndIsOptional() {
+        service.record(SHOP, SOURCE, new ExternalPaymentRequest("utan@example.org", "Ut", "An", 2026, 200, null, null, false, null));
+        service.record(SHOP, SOURCE, new ExternalPaymentRequest("blank@example.org", "Bl", "Ank", 2026, 200, null, "  ", false, null));
+
+        verify(payments, org.mockito.Mockito.times(2)).recordExternal(eq(SHOP), eq(SOURCE), org.mockito.ArgumentMatchers.isNull(), anyString(), anyInt(), anyBoolean(),
+                anyBoolean(), anyInt(), any(), eq("Online: " + SOURCE));
+    }
+
+    @Test
+    void theSameIdFromAnotherApplicationIsAnotherPayment() {
+        told.put("order-1", new ExternalPayment(SHOP, SOURCE, "order-1", "req-1", "RECORDED", true, clock.instant()));
+        when(externals.findBySourceAndExternalRef(eq("other-service"), anyString())).thenReturn(Optional.empty());
+
+        assertThat(service.record(SHOP, "other-service", request("greta@example.org", "order-1")).status()).isEqualTo(ExternalPaymentService.Status.RECORDED);
+        assertThat(service.record(SHOP, SOURCE, request("greta@example.org", "order-1")).status()).isEqualTo(ExternalPaymentService.Status.DUPLICATE);
+    }
+
+    @Test
     void invalidRequestsAreRefusedBeforeAnythingIsDone() {
-        assertThatThrownBy(() -> service.record(SHOP, request("not-an-email", "order-1"))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.record(SHOP, request("greta@example.org", " "))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "G", "G", 1800, 200, null, "o", null, null)))
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, request("not-an-email", "order-1"))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, request("greta@example.org", "x".repeat(101)))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, new ExternalPaymentRequest("greta@example.org", "G", "G", 1800, 200, null, "o", null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("greta@example.org", "", "G", 2026, 200, null, "o", null, null)))
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, new ExternalPaymentRequest("greta@example.org", "", "G", 2026, 200, null, "o", null, null)))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(spexregister, never()).create(anyString(), anyString(), anyString());
     }
 
     @Test
     void aSupportMemberGetsTheSupportAccessAndNotTheMemberAccess() {
-        final var result = service.record(SHOP, new ExternalPaymentRequest("stod@example.org", "Stig", "Stod", 2026, 100, LocalDate.of(2026, 11, 25), "order-9", false,
+        final var result = service.record(SHOP, SOURCE, new ExternalPaymentRequest("stod@example.org", "Stig", "Stod", 2026, 100, LocalDate.of(2026, 11, 25), "order-9", false,
                 nu.fgv.membership.server.payment.FeeKind.SUPPORT));
 
         assertThat(result.accountCreated()).isTrue();
@@ -249,7 +268,7 @@ class ExternalPaymentServiceTest {
 
         assertThat(keycloak.rolesOf(user.id(), "fgv-spexregister")).containsExactly("USER");
         assertThat(keycloak.rolesOf(user.id(), "fgv-membership")).isEmpty();
-        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(false), eq(true), eq(100), any(), anyString());
+        verify(payments).recordExternal(eq(SHOP), eq(SOURCE), eq("order-9"), eq("sp-1"), eq(2026), eq(false), eq(true), eq(100), any(), anyString());
     }
 
     @Test
@@ -265,14 +284,14 @@ class ExternalPaymentServiceTest {
 
     @Test
     void aLifeMembershipFromTheShopIsStillSold() {
-        service.record(SHOP, new ExternalPaymentRequest("liv@example.org", "Liv", "Livs", 2026, 2000, LocalDate.of(2026, 11, 25), "order-10", true, null));
+        service.record(SHOP, SOURCE, new ExternalPaymentRequest("liv@example.org", "Liv", "Livs", 2026, 2000, LocalDate.of(2026, 11, 25), "order-10", true, null));
 
-        verify(payments).recordExternal(eq(SHOP), eq("sp-1"), eq(2026), eq(true), eq(false), eq(2000), any(), anyString());
+        verify(payments).recordExternal(eq(SHOP), eq(SOURCE), eq("order-10"), eq("sp-1"), eq(2026), eq(true), eq(false), eq(2000), any(), anyString());
     }
 
     @Test
     void aFamilyMembershipIsNotSoldInTheShop() {
-        assertThatThrownBy(() -> service.record(SHOP, new ExternalPaymentRequest("fam@example.org", "Fam", "Ilj", 2026, 350, null, "order-11", false,
+        assertThatThrownBy(() -> service.record(SHOP, SOURCE, new ExternalPaymentRequest("fam@example.org", "Fam", "Ilj", 2026, 350, null, "order-11", false,
                 nu.fgv.membership.server.payment.FeeKind.FAMILY))).isInstanceOf(IllegalArgumentException.class);
         verify(spexregister, never()).create(anyString(), anyString(), anyString());
     }

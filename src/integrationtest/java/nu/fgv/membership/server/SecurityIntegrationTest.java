@@ -51,13 +51,14 @@ class SecurityIntegrationTest extends AbstractIntegrationTest {
         graphQl(serviceToken("fgv-revival-service")).document("{ membershipChanges { hasMore } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
         graphQl(serviceToken("fgv-revival-service")).document("{ revivalFeeLevels { id } }").execute().errors().verify();
         graphQl(serviceToken("fgv-spexregister-service")).document("{ revivalFeeLevels { id } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
-        graphQl(serviceToken("fgv-wordpress-service")).document("{ myMembership { linked } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
+        graphQl(serviceToken("fgv-external-payment-service")).document("{ myMembership { linked } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
     }
 
     @Test
-    void theWordpressShopMayOnlyTellAboutPayments() {
-        http().post().uri("/api/external-payments").header("Authorization", userToken(ADMIN)).header("Content-Type", "application/json")
+    void anExternalApplicationMayOnlyTellAboutPaymentsAndLookPeopleUp() {
+        http().post().uri("/api/external/payments").header("Authorization", userToken(ADMIN)).header("Content-Type", "application/json")
                 .bodyValue("{}").exchange().expectStatus().isForbidden();
-        http().post().uri("/api/external-payments").header("Content-Type", "application/json").bodyValue("{}").exchange().expectStatus().isUnauthorized();
+        http().get().uri("/api/external/lookup?email=a@b.c").header("Authorization", userToken(ADMIN)).exchange().expectStatus().isForbidden();
+        http().post().uri("/api/external/payments").header("Content-Type", "application/json").bodyValue("{}").exchange().expectStatus().isUnauthorized();
     }
 }

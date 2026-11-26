@@ -235,7 +235,7 @@ public class PaymentService {
     }
 
     /**
-     * A payment made elsewhere (the WordPress shop): the memberships count at once, and what was asked and paid is kept
+     * A payment made elsewhere (an external application): the memberships count at once, and what was asked and paid is kept
      * as a matched request, so that it is bookkeeping like any other.
      *
      * @param actor the system that told us, by Keycloak subject
@@ -253,6 +253,17 @@ public class PaymentService {
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
                                                          final boolean support, final int amount, final LocalDate paidOn, final String note) {
+        return recordExternal(actor, null, null, spexareId, year, lifetime, support, amount, paidOn, note);
+    }
+
+    /**
+     * @param source    the application that told us, by its client
+     * @param reference that application's own id for the payment, or null
+     */
+    @Transactional
+    public java.util.Optional<PaymentView> recordExternal(final String actor, final String source, final String reference, final String spexareId,
+                                                         final int year, final boolean lifetime, final boolean support, final int amount,
+                                                         final LocalDate paidOn, final String note) {
         final String payer = spexregister.byIds(List.of(spexareId)).stream().findFirst().map(Spexare::name).orElse(spexareId);
 
         if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(properties.membershipType())
@@ -269,6 +280,7 @@ public class PaymentService {
         final PaymentRequest request = new PaymentRequest(newReference(year), spexareId, amount, actor, Set.of(membership.getId()), clock.instant());
 
         request.matched();
+        request.external(source, reference);
         requests.save(request);
         payments.save(new Payment(request.getPk(), paidOn, amount, PaymentHow.ONLINE, actor, note, clock.instant()));
 
@@ -388,7 +400,7 @@ public class PaymentService {
      * @param transaction whether it came from an imported bank transaction
      */
     public record PaymentLine(String id, String reference, String spexareName, java.time.LocalDate paidOn, int amount, PaymentHow how,
-                              String note, boolean transaction) {
+                              String note, boolean transaction, String externalReference) {
     }
 
     /**
@@ -410,7 +422,8 @@ public class PaymentService {
 
             return new PaymentLine(payment.getId(), request.getReference(), request.isForRevival() ? request.getPayerLabel()
                     : spexare.containsKey(request.getSpexareId()) ? spexare.get(request.getSpexareId()).name() : null, payment.getPaidOn(), payment.getAmount(), payment.getHow(),
-                    payment.getNote(), payment.getTransactionPk() != null);
+                    payment.getNote(), payment.getTransactionPk() != null,
+                    request.getExternalReference() == null ? null : request.getExternalSource() + " " + request.getExternalReference());
         }).toList();
     }
 
@@ -647,6 +660,7 @@ public class PaymentService {
                 spexare != null ? spexare.name() : request.getPayerLabel(), items,
                 new PaymentView.Payee(properties.swishNumber(), properties.bankgiro(), properties.bankAccount(), properties.payeeName()), null, paidSoFar(request),
                 request.getFamilyNote(), request.getFamilyId() != null,
-                request.getFamilyId() != null && items.stream().map(PaymentView.Item::spexareId).distinct().count() < 2);
+                request.getFamilyId() != null && items.stream().map(PaymentView.Item::spexareId).distinct().count() < 2,
+                request.getExternalSource(), request.getExternalReference());
     }
 }

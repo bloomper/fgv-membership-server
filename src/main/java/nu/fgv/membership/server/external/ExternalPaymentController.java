@@ -22,15 +22,18 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
 /**
- * {@code POST /api/external-payments}: the WordPress shop tells that someone paid for a year. It needs the
- * {@code PAYMENT} role of {@code fgv-membership}, which only the shop's service account holds.
+ * What other applications may do here: {@code POST /api/external/payments} tells that someone paid for a year, and
+ * {@code GET /api/external/lookup?email=} asks whether an address has an account and a membership. Both need the
+ * {@code PAYMENT} role of {@code fgv-membership}, which only the service accounts of such applications hold.
  *
  * <p>Answers {@code 201} with {@code RECORDED}, {@code 200} with {@code DUPLICATE} (told before) or
  * {@code ALREADY_MEMBER} (they were already a member that year, so nothing was recorded), and {@code 400} with a message
@@ -43,18 +46,31 @@ import java.util.Map;
 public class ExternalPaymentController {
 
     private final ExternalPaymentService service;
+    private final ExternalLookupService lookup;
 
-    public ExternalPaymentController(final ExternalPaymentService service) {
+    public ExternalPaymentController(final ExternalPaymentService service, final ExternalLookupService lookup) {
         this.service = service;
+        this.lookup = lookup;
     }
 
-    @PostMapping("/api/external-payments")
+    @PostMapping("/api/external/payments")
     @PreAuthorize("hasRole('fgv-membership_PAYMENT')")
     public ResponseEntity<ExternalPaymentService.Result> pay(@AuthenticationPrincipal final Jwt caller,
                                                              @RequestBody final ExternalPaymentRequest request) {
-        final ExternalPaymentService.Result result = service.record(caller.getSubject(), request);
+        final ExternalPaymentService.Result result = service.record(caller.getSubject(), caller.getClaimAsString("azp"), request);
 
         return ResponseEntity.status(result.status() == ExternalPaymentService.Status.RECORDED ? HttpStatus.CREATED : HttpStatus.OK).body(result);
+    }
+
+    @GetMapping("/api/external/lookup")
+    @PreAuthorize("hasRole('fgv-membership_PAYMENT')")
+    public ExternalLookupService.Result lookup(@RequestParam final String email, @RequestParam(required = false) final Integer year) {
+        return lookup.lookup(email, year);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> unavailable(final IllegalStateException e) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

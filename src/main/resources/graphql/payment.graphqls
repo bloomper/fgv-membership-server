@@ -11,6 +11,8 @@ enum PaymentHow {
     SWISH
     BANK_TRANSFER
     CASH
+    "Paid in another application, which told us (the treasurer does not record these)"
+    ONLINE
 }
 
 extend type Query {
@@ -121,6 +123,9 @@ type PaymentRequest {
     familyIncomplete: Boolean!
     "BOARD. The people the request's memberships are for"
     familyMembers: [SpexarePerson!]!
+    "Paid in another application: which one, and its own id for the payment"
+    externalSource: String
+    externalReference: String
     memberships: [PaymentItem!]!
     payee: Payee!
     "Opens Swish with number, amount and reference filled in, on a phone. Null once paid or when there is no Swish number."

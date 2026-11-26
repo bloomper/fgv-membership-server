@@ -110,15 +110,14 @@ public class MaintenanceService {
         return jobs().stream().filter(job -> job.name().equals(name)).findFirst().orElseThrow();
     }
 
-    @Transactional
+    /**
+     * Saves when a job last ran and what it did. Saving a setting that has the same name replaces it; this is not done
+     * by changing a loaded one, because this method is not run in a transaction of its own.
+     */
     void record(final String name, final String result) {
-        final String value = clock.instant() + "|" + result;
-
-        settings.findById("job." + name).ifPresentOrElse(setting -> setting.setValue(value), () -> settings.save(new AppSetting("job." + name, value)));
-        settings.flush();
+        settings.save(new AppSetting("job." + name, clock.instant() + "|" + result));
     }
 
-    @Transactional
     int removeExpiredLinks() {
         return Math.toIntExact(links.deleteByExpiresAtBefore(clock.instant()));
     }

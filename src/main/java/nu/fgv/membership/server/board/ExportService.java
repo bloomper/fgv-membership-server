@@ -63,16 +63,17 @@ public class ExportService {
      */
     @Transactional(readOnly = true)
     public byte[] payments(final int year) {
-        record Line(java.time.LocalDate paidOn, int amount, String reference, String spexareId, String how, String match, String note) {
+        record Line(java.time.LocalDate paidOn, int amount, String reference, String spexareId, String how, String match, String note, String external) {
         }
 
         final List<Line> lines = jdbc.sql("""
-                        SELECT p.paid_on, p.amount, r.reference, r.spexare_id, p.how, p.note, t.file_name, p.transaction_pk
+                        SELECT p.paid_on, p.amount, r.reference, r.spexare_id, p.how, p.note, t.file_name, p.transaction_pk, r.external_source, r.external_reference
                         FROM payment p JOIN payment_request r ON r.pk = p.request_pk LEFT JOIN bank_transaction t ON t.pk = p.transaction_pk
                         WHERE YEAR(p.paid_on) = :year ORDER BY p.paid_on, p.pk""")
                 .param("year", year)
                 .query((rs, i) -> new Line(rs.getDate("paid_on").toLocalDate(), rs.getInt("amount"), rs.getString("reference"), rs.getString("spexare_id"),
-                        rs.getString("how"), rs.getObject("transaction_pk") == null ? "Manuellt" : "Bank: " + rs.getString("file_name"), rs.getString("note")))
+                        rs.getString("how"), rs.getObject("transaction_pk") == null ? "Manuellt" : "Bank: " + rs.getString("file_name"), rs.getString("note"),
+                        rs.getString("external_reference") == null ? null : rs.getString("external_source") + " " + rs.getString("external_reference")))
                 .list();
         final Map<String, String> names = new HashMap<>();
         final List<String> ids = lines.stream().map(Line::spexareId).distinct().toList();
@@ -84,7 +85,7 @@ public class ExportService {
         final List<List<Object>> rows = new ArrayList<>();
 
         lines.forEach(line -> rows.add(java.util.Arrays.asList(line.paidOn().toString(), line.amount(), line.reference(),
-                names.getOrDefault(line.spexareId(), line.spexareId()), line.how(), line.match(), line.note())));
-        return Xlsx.write("Betalningar " + year, List.of("Datum", "Belopp", "Referens", "Medlem", "Hur", "Matchning", "Anteckning"), rows);
+                names.getOrDefault(line.spexareId(), line.spexareId()), line.how(), line.match(), line.note(), line.external())));
+        return Xlsx.write("Betalningar " + year, List.of("Datum", "Belopp", "Referens", "Medlem", "Hur", "Matchning", "Anteckning", "Extern referens"), rows);
     }
 }

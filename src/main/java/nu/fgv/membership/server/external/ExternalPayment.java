@@ -42,7 +42,10 @@ public class ExternalPayment {
     @Column(name = "source_user", nullable = false, length = 36)
     private String sourceUser;
 
-    @Column(name = "external_ref", nullable = false, length = 100, unique = true)
+    @Column(length = 100)
+    private String source;
+
+    @Column(name = "external_ref", length = 100)
     private String externalRef;
 
     @Column(name = "request_id", length = 36)
@@ -60,9 +63,10 @@ public class ExternalPayment {
     protected ExternalPayment() {
     }
 
-    public ExternalPayment(final String sourceUser, final String externalRef, final String requestId, final String status,
+    public ExternalPayment(final String sourceUser, final String source, final String externalRef, final String requestId, final String status,
                            final boolean accountCreated, final Instant now) {
         this.sourceUser = sourceUser;
+        this.source = source;
         this.externalRef = externalRef;
         this.requestId = requestId;
         this.status = status;

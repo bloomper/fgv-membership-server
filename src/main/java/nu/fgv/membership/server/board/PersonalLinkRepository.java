@@ -28,5 +28,6 @@ public interface PersonalLinkRepository extends JpaRepository<PersonalLink, Long
 
     Optional<PersonalLink> findByTokenHash(String tokenHash);
 
+    @org.springframework.transaction.annotation.Transactional
     long deleteByExpiresAtBefore(java.time.Instant before);
 }

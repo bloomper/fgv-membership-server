@@ -26,5 +26,5 @@ import java.util.Optional;
  */
 public interface ExternalPaymentRepository extends JpaRepository<ExternalPayment, Long> {
 
-    Optional<ExternalPayment> findByExternalRef(String externalRef);
+    Optional<ExternalPayment> findBySourceAndExternalRef(String source, String externalRef);
 }

@@ -111,4 +111,6 @@ type PaymentLine {
     note: String
     "Whether it came from an imported transaction"
     transaction: Boolean!
+    "Paid in another application: which one and its id for the payment"
+    externalReference: String
 }

@@ -19,9 +19,11 @@ package nu.fgv.membership.server.external;
 import java.time.LocalDate;
 
 /**
- * What the shop tells: who paid for which year, with the shop's own reference for the order.
+ * What an external application tells: who paid for which year, with its own id for the payment.
  *
- * @param reference the shop's order reference; telling the same one twice changes nothing
+ * @param paymentReference the other application's own id for the payment (an order or transaction id): kept with the payment, shown
+ *                  to the treasurer, and what makes telling the same payment twice harmless; optional, but without it nothing
+ *                  protects against being told twice
  * @param amount    whole kronor paid
  * @param paidOn    the day it was paid; today when missing
  * @param lifetime  a life membership from {@code year}
@@ -32,5 +34,5 @@ import java.time.LocalDate;
  * @since 1.0
  */
 public record ExternalPaymentRequest(String email, String firstName, String lastName, Integer year, Integer amount, LocalDate paidOn,
-                                     String reference, Boolean lifetime, nu.fgv.membership.server.payment.FeeKind kind) {
+                                     String paymentReference, Boolean lifetime, nu.fgv.membership.server.payment.FeeKind kind) {
 }

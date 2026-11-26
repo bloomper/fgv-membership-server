@@ -36,7 +36,7 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * A payment made elsewhere (the WordPress shop) tells which email address paid for which year. The spexare is found in
+ * A payment made elsewhere (an external application) tells which email address paid for which year. The spexare is found in
  * Spexregister by that address, or created there; the user is found in Keycloak by it, or created with the default
  * access and told, with a link to choose a password. Then the payment is recorded like any other.
  *
@@ -57,10 +57,11 @@ public class ExternalPaymentService {
     public enum Status { RECORDED, DUPLICATE, ALREADY_MEMBER }
 
     /**
-     * @param reference      the payment's own reference here (the one a treasurer sees), when it was recorded
+     * @param reference      the payment's reference here (the one a treasurer sees), when it was recorded
+     * @param paymentReference what the other application sent as its own id for the payment, as it was sent
      * @param accountCreated whether an account was created for this payment
      */
-    public record Result(Status status, boolean accountCreated, String reference) {
+    public record Result(Status status, boolean accountCreated, String reference, String paymentReference) {
     }
 
     private final ExternalPaymentRepository externals;
@@ -90,13 +91,14 @@ public class ExternalPaymentService {
      * @param actor the shop's service account, by Keycloak subject
      * @throws IllegalArgumentException when the request is not valid
      */
-    public Result record(final String actor, final ExternalPaymentRequest request) {
+    public Result record(final String actor, final String source, final ExternalPaymentRequest request) {
         final String email = validate(request);
         final nu.fgv.membership.server.payment.FeeKind kind = kindOf(request);
-        final Optional<ExternalPayment> earlier = externals.findByExternalRef(request.reference().strip());
+        final String paymentReference = request.paymentReference() == null || request.paymentReference().isBlank() ? null : request.paymentReference().strip();
+        final Optional<ExternalPayment> earlier = paymentReference == null ? Optional.empty() : externals.findBySourceAndExternalRef(source, paymentReference);
 
         if (earlier.isPresent()) {
-            return new Result(Status.DUPLICATE, earlier.get().isAccountCreated(), null);
+            return new Result(Status.DUPLICATE, earlier.get().isAccountCreated(), null, paymentReference);
         }
 
         final Spexare spexare = spexregister.byEmail(email)
@@ -106,17 +108,17 @@ public class ExternalPaymentService {
         return transaction.execute(_ -> {
             final boolean lifetime = kind == nu.fgv.membership.server.payment.FeeKind.LIFETIME;
             final LocalDate paidOn = request.paidOn() == null ? LocalDate.now(clock.withZone(ZONE)) : request.paidOn();
-            final Optional<PaymentView> view = payments.recordExternal(actor, spexare.id(), request.year(), lifetime, kind == nu.fgv.membership.server.payment.FeeKind.SUPPORT, request.amount(), paidOn,
-                    "Online: " + request.reference().strip());
+            final Optional<PaymentView> view = payments.recordExternal(actor, source, paymentReference, spexare.id(), request.year(), lifetime,
+                    kind == nu.fgv.membership.server.payment.FeeKind.SUPPORT, request.amount(), paidOn, "Online: " + source + (paymentReference == null ? "" : " " + paymentReference));
             final Status status = view.isPresent() ? Status.RECORDED : Status.ALREADY_MEMBER;
 
-            externals.save(new ExternalPayment(actor, request.reference().strip(), view.map(PaymentView::id).orElse(null), status.name(),
+            externals.save(new ExternalPayment(actor, source, paymentReference, view.map(PaymentView::id).orElse(null), status.name(),
                     accountCreated, clock.instant()));
             if (!view.isPresent()) {
-                log.warn("{} paid online ({}) but is already a member {}: nothing recorded, a refund may be due", spexare.id(),
-                        request.reference(), request.year());
+                log.warn("{} paid in {} ({}) but is already a member {}: nothing recorded, a refund may be due", spexare.id(), source,
+                        paymentReference, request.year());
             }
-            return new Result(status, accountCreated, view.map(PaymentView::reference).orElse(null));
+            return new Result(status, accountCreated, view.map(PaymentView::reference).orElse(null), paymentReference);
         });
     }
 
@@ -144,7 +146,7 @@ public class ExternalPaymentService {
 
     private static nu.fgv.membership.server.payment.FeeKind kindOf(final ExternalPaymentRequest request) {
         if (request.kind() == nu.fgv.membership.server.payment.FeeKind.FAMILY) {
-            throw new IllegalArgumentException("A family membership is not sold in the shop");
+            throw new IllegalArgumentException("A family membership cannot be paid for in another application");
         }
         return Boolean.TRUE.equals(request.lifetime()) ? nu.fgv.membership.server.payment.FeeKind.LIFETIME
                 : request.kind() == null ? nu.fgv.membership.server.payment.FeeKind.STANDARD : request.kind();
@@ -154,8 +156,8 @@ public class ExternalPaymentService {
         if (request.email() == null || !EMAIL.matcher(request.email().strip()).matches()) {
             throw new IllegalArgumentException("A valid email address is needed");
         }
-        if (request.reference() == null || request.reference().isBlank() || request.reference().length() > 100) {
-            throw new IllegalArgumentException("The shop's order reference is needed");
+        if (request.paymentReference() != null && request.paymentReference().strip().length() > 100) {
+            throw new IllegalArgumentException("The payment reference can be at most 100 characters");
         }
         if (request.firstName() == null || request.firstName().isBlank() || request.lastName() == null || request.lastName().isBlank()) {
             throw new IllegalArgumentException("First and last name are needed");

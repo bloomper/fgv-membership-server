@@ -59,6 +59,12 @@ public class PaymentRequest {
     @Column(name = "payer_label", length = 200)
     private String payerLabel;
 
+    @Column(name = "external_source", length = 100)
+    private String externalSource;
+
+    @Column(name = "external_reference", length = 100)
+    private String externalReference;
+
     @Column(name = "family_id", length = 36)
     private String familyId;
 
@@ -130,6 +136,22 @@ public class PaymentRequest {
 
     public String getFamilyNote() {
         return familyNote;
+    }
+
+    /**
+     * Paid in another application, which told us: its name and its own id for the payment.
+     */
+    public void external(final String source, final String reference) {
+        this.externalSource = source;
+        this.externalReference = reference;
+    }
+
+    public String getExternalSource() {
+        return externalSource;
+    }
+
+    public String getExternalReference() {
+        return externalReference;
     }
 
     public boolean isForRevival() {
