@@ -1,0 +1,51 @@
+# The import API (spec 5.9): spexregister-migration's service account (IMPORT) carries Spexregister 1.x's FGV
+# memberships in once.
+
+extend type Mutation {
+    """
+    IMPORT. Each record becomes the spexare's FGV membership for the year, PAID, how MIGRATED, with its line in the
+    feed. A known source key updates what it made, unless the board has changed it since (KEPT); a membership the
+    spexare already had is KEPT too. With dryRun nothing is kept. At most 500 records.
+    """
+    importBatch(input: ImportBatchInput!, dryRun: Boolean! = false): ImportBatchResult!
+    "IMPORT. Removes the memberships imported under the source prefix that are still as imported; returns how many."
+    importForget(sourcePrefix: String!): Int!
+}
+
+input ImportBatchInput {
+    memberships: [ImportMembershipInput!]
+}
+
+input ImportMembershipInput {
+    sourceKey: String!
+    "Spexregister's id of the spexare."
+    spexareId: ID!
+    year: Int!
+}
+
+type ImportBatchResult {
+    dryRun: Boolean!
+    items: [ImportBatchItem!]!
+    created: Int!
+    updated: Int!
+    unchanged: Int!
+    kept: Int!
+    failed: Int!
+}
+
+type ImportBatchItem {
+    kind: String!
+    sourceKey: String!
+    id: ID
+    outcome: ImportBatchOutcome!
+    message: String
+    warnings: [String!]!
+}
+
+enum ImportBatchOutcome {
+    CREATED
+    UPDATED
+    UNCHANGED
+    KEPT
+    FAILED
+}
