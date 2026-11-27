@@ -49,7 +49,8 @@ public class RevivalGraphqlApi {
         this.audit = audit;
     }
 
-    public record RevivalResult(String requestId, String reference, int amount, int paid, PaymentStatus status, int included, boolean existing,
+    public record RevivalResult(String requestId, String reference, int amount, int paid, PaymentStatus status,
+                                int included, boolean existing,
                                 List<String> alreadyMembers, List<String> alreadyRequested, Payee payee) {
     }
 

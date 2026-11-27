@@ -63,7 +63,8 @@ public class ExportService {
      */
     @Transactional(readOnly = true)
     public byte[] payments(final int year) {
-        record Line(java.time.LocalDate paidOn, int amount, String reference, String spexareId, String how, String match, String note, String external) {
+        record Line(java.time.LocalDate paidOn, int amount, String reference, String spexareId, String how,
+                    String match, String note, String external) {
         }
 
         final List<Line> lines = jdbc.sql("""

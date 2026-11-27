@@ -179,7 +179,8 @@ public class BankService {
      * @param why   {@code REFERENCE} (a mistyped reference) or {@code NAME}
      * @param score higher is likelier
      */
-    public record Suggestion(String requestId, String reference, String spexareName, int amount, PaymentStatus status, String why, double score) {
+    public record Suggestion(String requestId, String reference, String spexareName, int amount, PaymentStatus status,
+                             String why, double score) {
     }
 
     /**

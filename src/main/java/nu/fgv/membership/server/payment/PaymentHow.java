@@ -24,6 +24,8 @@ public enum PaymentHow {
     SWISH,
     BANK_TRANSFER,
     CASH,
-    /** Paid online elsewhere, e.g. in an external shop */
+    /**
+     * Paid online elsewhere, e.g. in an external shop
+     */
     ONLINE
 }

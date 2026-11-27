@@ -82,8 +82,10 @@ public class GlobalExceptionResolver extends DataFetcherExceptionResolverAdapter
     protected @Nullable GraphQLError resolveToSingleError(final Throwable ex, final DataFetchingEnvironment environment) {
         return switch (ex) {
             case final AccessDeniedException _ -> localized(ErrorType.FORBIDDEN, "error.forbidden", environment);
-            case final AuthenticationException _ -> localized(ErrorType.UNAUTHORIZED, "error.unauthorized", environment);
-            case final KeycloakException _ -> localized(CustomErrorType.DIRECTORY_UNAVAILABLE, "error.directory.unavailable", environment);
+            case final AuthenticationException _ ->
+                    localized(ErrorType.UNAUTHORIZED, "error.unauthorized", environment);
+            case final KeycloakException _ ->
+                    localized(CustomErrorType.DIRECTORY_UNAVAILABLE, "error.directory.unavailable", environment);
             case final OptimisticLockingFailureException _, final OptimisticLockException _ ->
                     localized(CustomErrorType.CONFLICT, "error.conflict", environment);
             case final IllegalStateException e when e.getMessage() != null && e.getMessage().startsWith("Spexregister") ->

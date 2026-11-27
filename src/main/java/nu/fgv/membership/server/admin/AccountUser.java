@@ -29,18 +29,28 @@ import java.util.List;
  * @author Anders Jacobsson
  * @since 1.0
  */
-public record AccountUser(String id, @Nullable String email, @Nullable String firstName, @Nullable String lastName, String displayName,
+public record AccountUser(String id, @Nullable String email, @Nullable String firstName, @Nullable String lastName,
+                          String displayName,
                           @Nullable String locale, boolean enabled, boolean emailVerified, UserStatus status,
-                          @Nullable Instant createdAt, @Nullable String registrationMessage, List<ApplicationAccess> access) {
+                          @Nullable Instant createdAt, @Nullable String registrationMessage,
+                          List<ApplicationAccess> access) {
 
     public enum UserStatus {
-        /** Verified the address and waits for access to an application. */
+        /**
+         * Verified the address and waits for access to an application.
+         */
         PENDING,
-        /** Has access and may log in. */
+        /**
+         * Has access and may log in.
+         */
         ACTIVE,
-        /** Switched off in Keycloak. */
+        /**
+         * Switched off in Keycloak.
+         */
         DEACTIVATED,
-        /** Registered but has not followed the link in the verification email. */
+        /**
+         * Registered but has not followed the link in the verification email.
+         */
         UNVERIFIED
     }
 

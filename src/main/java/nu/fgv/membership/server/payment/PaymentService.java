@@ -243,7 +243,7 @@ public class PaymentService {
      */
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
-                                                         final int amount, final LocalDate paidOn, final String note) {
+                                                          final int amount, final LocalDate paidOn, final String note) {
         return recordExternal(actor, spexareId, year, lifetime, false, amount, paidOn, note);
     }
 
@@ -252,7 +252,7 @@ public class PaymentService {
      */
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String spexareId, final int year, final boolean lifetime,
-                                                         final boolean support, final int amount, final LocalDate paidOn, final String note) {
+                                                          final boolean support, final int amount, final LocalDate paidOn, final String note) {
         return recordExternal(actor, null, null, spexareId, year, lifetime, support, amount, paidOn, note);
     }
 
@@ -262,8 +262,8 @@ public class PaymentService {
      */
     @Transactional
     public java.util.Optional<PaymentView> recordExternal(final String actor, final String source, final String reference, final String spexareId,
-                                                         final int year, final boolean lifetime, final boolean support, final int amount,
-                                                         final LocalDate paidOn, final String note) {
+                                                          final int year, final boolean lifetime, final boolean support, final int amount,
+                                                          final LocalDate paidOn, final String note) {
         final String payer = spexregister.byIds(List.of(spexareId)).stream().findFirst().map(Spexare::name).orElse(spexareId);
 
         if (membershipRepository.findBySpexareId(spexareId).stream().anyMatch(existing -> existing.getType().equals(properties.membershipType())
@@ -395,11 +395,12 @@ public class PaymentService {
     }
 
     /**
-     * @param reference the request's reference
+     * @param reference   the request's reference
      * @param spexareName who it was for
      * @param transaction whether it came from an imported bank transaction
      */
-    public record PaymentLine(String id, String reference, String spexareName, java.time.LocalDate paidOn, int amount, PaymentHow how,
+    public record PaymentLine(String id, String reference, String spexareName, java.time.LocalDate paidOn, int amount,
+                              PaymentHow how,
                               String note, boolean transaction, String externalReference) {
     }
 
@@ -583,7 +584,8 @@ public class PaymentService {
      * @param alreadyRequested the spexare who are on another request that can still be paid, and are left out
      * @param existing         whether the application had asked with this key before, so that this is that request again
      */
-    public record RevivalRequest(PaymentView request, int included, List<String> alreadyMembers, List<String> alreadyRequested, boolean existing) {
+    public record RevivalRequest(PaymentView request, int included, List<String> alreadyMembers,
+                                 List<String> alreadyRequested, boolean existing) {
     }
 
     /**

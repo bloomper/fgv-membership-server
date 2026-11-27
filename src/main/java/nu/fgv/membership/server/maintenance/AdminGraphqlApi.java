@@ -51,7 +51,8 @@ public class AdminGraphqlApi {
         this.audit = audit;
     }
 
-    public record SettingsInput(String swishNumber, String bankgiro, String bankAccount, String payeeName, int reminderDays, String recipients) {
+    public record SettingsInput(String swishNumber, String bankgiro, String bankAccount, String payeeName,
+                                int reminderDays, String recipients) {
     }
 
     @QueryMapping

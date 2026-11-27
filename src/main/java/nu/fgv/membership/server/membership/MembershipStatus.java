@@ -21,14 +21,22 @@ package nu.fgv.membership.server.membership;
  * @since 1.0
  */
 public enum MembershipStatus {
-    /** Requested, not paid */
+    /**
+     * Requested, not paid
+     */
     PENDING,
-    /** The member says they paid */
+    /**
+     * The member says they paid
+     */
     REPORTED,
     PAID,
-    /** Granted without a fee */
+    /**
+     * Granted without a fee
+     */
     WAIVED,
-    /** Refunded or withdrawn */
+    /**
+     * Refunded or withdrawn
+     */
     CANCELLED;
 
     /**

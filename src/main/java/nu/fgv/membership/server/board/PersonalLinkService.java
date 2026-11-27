@@ -54,7 +54,8 @@ public class PersonalLinkService {
     /**
      * What the page of a personal link shows, and nothing more.
      */
-    public record Page(String reference, int amount, int paid, PaymentStatus status, List<Integer> years, String swishNumber, String bankgiro, String bankAccount,
+    public record Page(String reference, int amount, int paid, PaymentStatus status, List<Integer> years,
+                       String swishNumber, String bankgiro, String bankAccount,
                        String swishLink, String qr, boolean optedOut) {
     }
 

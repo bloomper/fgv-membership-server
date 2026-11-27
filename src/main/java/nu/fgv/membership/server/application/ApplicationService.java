@@ -74,7 +74,8 @@ public class ApplicationService {
     /**
      * @param applicantEmail from the account in Keycloak, for the board to see
      */
-    public record Item(String id, String applicantName, String applicantEmail, String text, Application.Status status, String createdAt,
+    public record Item(String id, String applicantName, String applicantEmail, String text, Application.Status status,
+                       String createdAt,
                        String decisionMessage) {
     }
 

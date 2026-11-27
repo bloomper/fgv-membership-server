@@ -72,6 +72,7 @@ public abstract class AbstractIntegrationTest {
     protected static final String SPEXARE_ID = "0197d6a0-0000-7000-8000-000000000001";
     protected static final WireMockServer SPEXREGISTER = new WireMockServer(options().dynamicPort());
     protected static final GreenMail MAIL = new GreenMail(new ServerSetup(freePort(), "0.0.0.0", ServerSetup.PROTOCOL_SMTP));
+
     private static int freePort() {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             return socket.getLocalPort();
