@@ -293,7 +293,8 @@ public class SampleDataImporter implements ApplicationRunner {
                         requests.save(request);
                         reported.add(request);
                     }
-                    case 7 -> memberships.record(person.id(), FGV, year, false, MembershipStatus.WAIVED, MembershipHow.WAIVED, "Hedersmedlem utan avgift");
+                    case 7 ->
+                            memberships.record(person.id(), FGV, year, false, MembershipStatus.WAIVED, MembershipHow.WAIVED, "Hedersmedlem utan avgift");
                     case 0 -> {
                         final PaymentRequest request = request(List.of(membership(person, year, MembershipStatus.CANCELLED, null)), person.id(), std.getAmount(), 40);
 

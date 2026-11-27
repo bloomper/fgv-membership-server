@@ -96,7 +96,7 @@ public class UserAdminGraphqlApi {
 
     @MutationMapping
     public boolean rejectUser(@AuthenticationPrincipal final Jwt actor, @Argument final String id, @Argument final String message,
-                                @Argument final Boolean notify) {
+                              @Argument final Boolean notify) {
         access.reject(actor.getSubject(), id, message, notify == null || notify);
         return true;
     }
@@ -131,6 +131,7 @@ public class UserAdminGraphqlApi {
     public record UserInput(String firstName, String lastName, String email, String locale) {
     }
 
-    public record ApplicationInfo(String clientId, String name, String url, List<String> ladder, boolean defaultAccess) {
+    public record ApplicationInfo(String clientId, String name, String url, List<String> ladder,
+                                  boolean defaultAccess) {
     }
 }

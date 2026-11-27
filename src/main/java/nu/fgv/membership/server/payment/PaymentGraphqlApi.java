@@ -66,10 +66,12 @@ public class PaymentGraphqlApi {
     public record MembershipItem(String id, String type, int year, boolean lifetime, String status) {
     }
 
-    public record FeeLevelView(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn, int amount, boolean retired) {
+    public record FeeLevelView(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn,
+                               int amount, boolean retired) {
     }
 
-    public record FeeLevelInput(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn, int amount) {
+    public record FeeLevelInput(String id, Integer year, FeeKind kind, boolean lifetime, String nameSv, String nameEn,
+                                int amount) {
     }
 
     /**

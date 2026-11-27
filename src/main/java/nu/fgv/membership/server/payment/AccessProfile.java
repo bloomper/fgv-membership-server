@@ -24,8 +24,12 @@ package nu.fgv.membership.server.payment;
  * @since 1.0
  */
 public enum AccessProfile {
-    /** Standard, family and life memberships */
+    /**
+     * Standard, family and life memberships
+     */
     MEMBER,
-    /** Support memberships (stödmedlemskap) */
+    /**
+     * Support memberships (stödmedlemskap)
+     */
     SUPPORT
 }

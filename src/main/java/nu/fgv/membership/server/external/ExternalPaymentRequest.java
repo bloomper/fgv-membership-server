@@ -22,17 +22,19 @@ import java.time.LocalDate;
  * What an external application tells: who paid for which year, with its own id for the payment.
  *
  * @param paymentReference the other application's own id for the payment (an order or transaction id): kept with the payment, shown
- *                  to the treasurer, and what makes telling the same payment twice harmless; optional, but without it nothing
- *                  protects against being told twice
- * @param amount    whole kronor paid
- * @param paidOn    the day it was paid; today when missing
- * @param lifetime  a life membership from {@code year}
- * @param kind      the kind of membership: {@code STANDARD} when missing; {@code SUPPORT} for a support membership, which gives a
- *                  new account other access (and {@code LIFETIME} is the same as {@code lifetime}); {@code FAMILY} is not
- *                  sold through the shop
+ *                         to the treasurer, and what makes telling the same payment twice harmless; optional, but without it nothing
+ *                         protects against being told twice
+ * @param amount           whole kronor paid
+ * @param paidOn           the day it was paid; today when missing
+ * @param lifetime         a life membership from {@code year}
+ * @param kind             the kind of membership: {@code STANDARD} when missing; {@code SUPPORT} for a support membership, which gives a
+ *                         new account other access (and {@code LIFETIME} is the same as {@code lifetime}); {@code FAMILY} is not
+ *                         sold through the shop
  * @author Anders Jacobsson
  * @since 1.0
  */
-public record ExternalPaymentRequest(String email, String firstName, String lastName, Integer year, Integer amount, LocalDate paidOn,
-                                     String paymentReference, Boolean lifetime, nu.fgv.membership.server.payment.FeeKind kind) {
+public record ExternalPaymentRequest(String email, String firstName, String lastName, Integer year, Integer amount,
+                                     LocalDate paidOn,
+                                     String paymentReference, Boolean lifetime,
+                                     nu.fgv.membership.server.payment.FeeKind kind) {
 }

@@ -22,7 +22,9 @@ package nu.fgv.membership.server.payment;
  */
 public enum PaymentStatus {
     OPEN,
-    /** The payer says they paid; waiting for the treasurer */
+    /**
+     * The payer says they paid; waiting for the treasurer
+     */
     REPORTED,
     MATCHED,
     CANCELLED

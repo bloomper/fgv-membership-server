@@ -21,8 +21,12 @@ package nu.fgv.membership.server.membership;
  * @since 1.0
  */
 public enum ChangeKind {
-    /** The membership counts now, as the record says */
+    /**
+     * The membership counts now, as the record says
+     */
     UPSERT,
-    /** The membership no longer counts */
+    /**
+     * The membership no longer counts
+     */
     DELETE
 }

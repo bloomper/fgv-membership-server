@@ -58,15 +58,16 @@ public class MemberService {
     }
 
     /**
-     * @param name           null when Spexregister could not be reached or no longer has the spexare
+     * @param name              null when Spexregister could not be reached or no longer has the spexare
      * @param wasMemberLastYear whether they counted as a member the year before
      */
-    public record Member(String membershipId, String spexareId, String name, String type, int year, boolean lifetime, String status, String how,
+    public record Member(String membershipId, String spexareId, String name, String type, int year, boolean lifetime,
+                         String status, String how,
                          String note, boolean optedOut, boolean wasMemberLastYear, boolean family, boolean support) {
     }
 
     /**
-     * @param members how many counted as members that year, life members included
+     * @param members  how many counted as members that year, life members included
      * @param lifetime of them, how many have a life membership
      * @param joined   who were not members the year before
      */
@@ -77,8 +78,8 @@ public class MemberService {
      * The members of a year, by name. By default those who count (paid or granted); {@code status} shows another status
      * instead, e.g. those who have not paid yet.
      *
-     * @param status       one of the membership statuses, or null for those who count
-     * @param how          how they paid, or null
+     * @param status            one of the membership statuses, or null for those who count
+     * @param how               how they paid, or null
      * @param wasMemberLastYear true: only those who were members the year before; false: only those who were not; null: all
      */
     @Transactional(readOnly = true)
@@ -131,7 +132,7 @@ public class MemberService {
         final int members = jdbc.sql("SELECT COUNT(DISTINCT m.spexare_id) " + counted).param("year", year).query(Integer.class).single();
         final int lifetime = jdbc.sql("SELECT COUNT(DISTINCT m.spexare_id) " + counted + " AND m.lifetime").param("year", year).query(Integer.class).single();
         final int joined = jdbc.sql("SELECT COUNT(DISTINCT m.spexare_id) " + counted + " AND NOT EXISTS (SELECT 1 FROM membership p WHERE p.spexare_id = m.spexare_id"
-                + " AND p.type = m.type AND p.status IN ('PAID', 'WAIVED') AND (p.membership_year = :last OR (p.lifetime AND p.membership_year <= :last)))")
+                        + " AND p.type = m.type AND p.status IN ('PAID', 'WAIVED') AND (p.membership_year = :last OR (p.lifetime AND p.membership_year <= :last)))")
                 .param("year", year).param("last", year - 1).query(Integer.class).single();
 
         return new Count(year, members, lifetime, joined);

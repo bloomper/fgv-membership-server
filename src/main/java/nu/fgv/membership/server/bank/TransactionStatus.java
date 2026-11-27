@@ -23,6 +23,8 @@ package nu.fgv.membership.server.bank;
 public enum TransactionStatus {
     UNMATCHED,
     MATCHED,
-    /** Not a membership payment: the content is gone, the fingerprint stays so it is not imported again */
+    /**
+     * Not a membership payment: the content is gone, the fingerprint stays so it is not imported again
+     */
     DISMISSED
 }

@@ -69,14 +69,15 @@ public class PaymentSettings {
     }
 
     /**
-     * @param swishNumber    FGV's Swish number
-     * @param bankgiro       FGV's bankgiro (payments are made to it with the reference as message)
-     * @param bankAccount    the bank account shown for transfers; a direct bank transfer is allowed but may not be used
-     * @param payeeName      the payee's name
-     * @param reminderDays   days an open request waits before the payer is reminded once
-     * @param recipients     who is emailed about payments and new registrations
+     * @param swishNumber  FGV's Swish number
+     * @param bankgiro     FGV's bankgiro (payments are made to it with the reference as message)
+     * @param bankAccount  the bank account shown for transfers; a direct bank transfer is allowed but may not be used
+     * @param payeeName    the payee's name
+     * @param reminderDays days an open request waits before the payer is reminded once
+     * @param recipients   who is emailed about payments and new registrations
      */
-    public record Values(String swishNumber, String bankgiro, String bankAccount, String payeeName, int reminderDays, List<String> recipients) {
+    public record Values(String swishNumber, String bankgiro, String bankAccount, String payeeName, int reminderDays,
+                         List<String> recipients) {
     }
 
     public String swishNumber() {

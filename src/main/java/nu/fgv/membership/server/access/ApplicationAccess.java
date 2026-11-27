@@ -23,18 +23,19 @@ import java.util.List;
 /**
  * One user's standing on one application.
  *
- * @param clientId     e.g. {@code fgv-spexregister}
- * @param name         what the application is called
- * @param url          where it is
- * @param ladder       the roles that can be given, lowest first
- * @param held         the roles held on the ladder
- * @param highest      the highest role held, if any
- * @param enabled      whether the user may use it
- * @param consistent   whether the roles held follow the ladder; if not, saving repairs them
+ * @param clientId      e.g. {@code fgv-spexregister}
+ * @param name          what the application is called
+ * @param url           where it is
+ * @param ladder        the roles that can be given, lowest first
+ * @param held          the roles held on the ladder
+ * @param highest       the highest role held, if any
+ * @param enabled       whether the user may use it
+ * @param consistent    whether the roles held follow the ladder; if not, saving repairs them
  * @param defaultAccess whether every approved user has it
  * @author Anders Jacobsson
  * @since 1.0
  */
-public record ApplicationAccess(String clientId, String name, @Nullable String url, List<String> ladder, List<String> held,
+public record ApplicationAccess(String clientId, String name, @Nullable String url, List<String> ladder,
+                                List<String> held,
                                 @Nullable String highest, boolean enabled, boolean consistent, boolean defaultAccess) {
 }

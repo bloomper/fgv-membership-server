@@ -26,11 +26,17 @@ public enum MembershipHow {
     SWISH,
     BANK_TRANSFER,
     CASH,
-    /** Paid by a revival for its participants */
+    /**
+     * Paid by a revival for its participants
+     */
     REVIVAL,
     WAIVED,
-    /** Paid online elsewhere, e.g. in an external shop */
+    /**
+     * Paid online elsewhere, e.g. in an external shop
+     */
     ONLINE,
-    /** Copied from Spexregister when Medlemskap took over (spec 5.9) */
+    /**
+     * Copied from Spexregister when Medlemskap took over (spec 5.9)
+     */
     MIGRATED
 }

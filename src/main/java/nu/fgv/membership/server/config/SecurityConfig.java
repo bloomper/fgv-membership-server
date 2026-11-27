@@ -68,7 +68,9 @@ public class SecurityConfig {
         return new JwtClaimValidator<String>("azp", properties.security().authorizedParties()::contains);
     }
 
-    /** Only access tokens: Keycloak's ID and refresh tokens are signed by the same keys. */
+    /**
+     * Only access tokens: Keycloak's ID and refresh tokens are signed by the same keys.
+     */
     @Bean
     public OAuth2TokenValidator<Jwt> accessTokenTypeValidator() {
         return new JwtClaimValidator<String>("typ", "Bearer"::equals);

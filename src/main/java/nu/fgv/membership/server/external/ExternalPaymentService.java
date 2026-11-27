@@ -54,12 +54,12 @@ public class ExternalPaymentService {
     private static final int SET_PASSWORD_LIFESPAN = 7 * 24 * 3600;
     private static final ZoneId ZONE = ZoneId.of("Europe/Stockholm");
 
-    public enum Status { RECORDED, DUPLICATE, ALREADY_MEMBER }
+    public enum Status {RECORDED, DUPLICATE, ALREADY_MEMBER}
 
     /**
-     * @param reference      the payment's reference here (the one a treasurer sees), when it was recorded
+     * @param reference        the payment's reference here (the one a treasurer sees), when it was recorded
      * @param paymentReference what the other application sent as its own id for the payment, as it was sent
-     * @param accountCreated whether an account was created for this payment
+     * @param accountCreated   whether an account was created for this payment
      */
     public record Result(Status status, boolean accountCreated, String reference, String paymentReference) {
     }

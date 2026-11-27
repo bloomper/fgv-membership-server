@@ -23,13 +23,13 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * @param webUrl        where Medlemskap Web is, without a trailing slash; links in emails point there
- * @param keycloak      the realm users live in, and the service account that administers them
- * @param turnstile     the challenge on the registration page
- * @param registration  how registration behaves
- * @param mail          sender of emails
- * @param applications  the FGV applications whose access and roles are administered, each with its ladder of roles
- * @param security      who may call the API
+ * @param webUrl       where Medlemskap Web is, without a trailing slash; links in emails point there
+ * @param keycloak     the realm users live in, and the service account that administers them
+ * @param turnstile    the challenge on the registration page
+ * @param registration how registration behaves
+ * @param mail         sender of emails
+ * @param applications the FGV applications whose access and roles are administered, each with its ladder of roles
+ * @param security     who may call the API
  * @author Anders Jacobsson
  * @since 1.0
  */
@@ -67,10 +67,10 @@ public record MembershipProperties(String webUrl,
     }
 
     /**
-     * @param tokenValidity     how long the link in the verification email works
-     * @param unverifiedExpiry  how long an unverified registration is kept before the account is removed
-     * @param notifyRecipients  who is told when a new user has verified their email address
-     * @param maxPerHourPerIp   registrations from one address per hour
+     * @param tokenValidity      how long the link in the verification email works
+     * @param unverifiedExpiry   how long an unverified registration is kept before the account is removed
+     * @param notifyRecipients   who is told when a new user has verified their email address
+     * @param maxPerHourPerIp    registrations from one address per hour
      * @param maxPerHourPerEmail registrations for one email address per hour
      */
     public record Registration(@DefaultValue("48h") Duration tokenValidity,

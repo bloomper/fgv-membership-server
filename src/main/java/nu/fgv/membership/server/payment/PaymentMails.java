@@ -52,11 +52,17 @@ public class PaymentMails {
      * What happened that the administrators are told about.
      */
     public enum Event {
-        /** A member says they have paid; the treasurer has to find the payment */
+        /**
+         * A member says they have paid; the treasurer has to find the payment
+         */
         REPORTED,
-        /** The shop told that someone paid; the membership counts already */
+        /**
+         * The shop told that someone paid; the membership counts already
+         */
         ONLINE,
-        /** The shop told about a payment from someone who already was a member that year; a refund may be due */
+        /**
+         * The shop told about a payment from someone who already was a member that year; a refund may be due
+         */
         ALREADY_MEMBER
     }
 

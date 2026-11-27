@@ -74,13 +74,15 @@ public class BoardService {
         this.webUrl = webUrl;
     }
 
-    public record MemberItem(String id, String type, int year, boolean lifetime, String status, String how, String note) {
+    public record MemberItem(String id, String type, int year, boolean lifetime, String status, String how,
+                             String note) {
     }
 
     public record EmailItem(String kind, String sentAt) {
     }
 
-    public record Detail(Spexare spexare, boolean optedOut, List<MemberItem> memberships, List<PaymentView> requests, List<EmailItem> emails) {
+    public record Detail(Spexare spexare, boolean optedOut, List<MemberItem> memberships, List<PaymentView> requests,
+                         List<EmailItem> emails) {
     }
 
     /**

@@ -23,13 +23,21 @@ package nu.fgv.membership.server.payment;
  * @since 1.0
  */
 public enum FeeKind {
-    /** One person, for a year */
+    /**
+     * One person, for a year
+     */
     STANDARD,
-    /** One family, for a year: one pays and every family member is a member */
+    /**
+     * One family, for a year: one pays and every family member is a member
+     */
     FAMILY,
-    /** One person, for life from the year it is paid */
+    /**
+     * One person, for life from the year it is paid
+     */
     LIFETIME,
-    /** A support membership (stödmedlemskap): a person, for a year, at another price and with other access */
+    /**
+     * A support membership (stödmedlemskap): a person, for a year, at another price and with other access
+     */
     SUPPORT;
 
     /**

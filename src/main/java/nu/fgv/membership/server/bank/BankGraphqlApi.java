@@ -56,14 +56,17 @@ public class BankGraphqlApi {
         this.clock = clock;
     }
 
-    public record TransactionView(String id, String bookedOn, int amount, String text, String payer, String status, String fileName) {
+    public record TransactionView(String id, String bookedOn, int amount, String text, String payer, String status,
+                                  String fileName) {
     }
 
-    public record FormatInput(String id, String name, String charset, String delimiter, int headerLines, int dateColumn, int amountColumn,
+    public record FormatInput(String id, String name, String charset, String delimiter, int headerLines, int dateColumn,
+                              int amountColumn,
                               int textColumn, Integer payerColumn, String dateFormat, boolean decimalComma) {
     }
 
-    public record FormatView(String id, String name, String charset, String delimiter, int headerLines, int dateColumn, int amountColumn,
+    public record FormatView(String id, String name, String charset, String delimiter, int headerLines, int dateColumn,
+                             int amountColumn,
                              int textColumn, Integer payerColumn, String dateFormat, boolean decimalComma) {
     }
 

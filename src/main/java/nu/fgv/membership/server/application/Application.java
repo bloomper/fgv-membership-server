@@ -38,7 +38,7 @@ import java.util.UUID;
 @Table(name = "application")
 public class Application {
 
-    public enum Status { PENDING, ACCEPTED, REJECTED }
+    public enum Status {PENDING, ACCEPTED, REJECTED}
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
