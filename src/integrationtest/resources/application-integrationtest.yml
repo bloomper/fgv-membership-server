@@ -1,0 +1,15 @@
+# Integration tests: MySQL and Keycloak in Testcontainers, a real SMTP server (GreenMail), WireMock for Spexregister
+# (see AbstractIntegrationTest, which sets the addresses)
+membership:
+  web-url: https://membership.test
+  turnstile:
+    skip-without-key: true
+  registration:
+    notify-recipients: admin@membership.test
+  payment:
+    swish-number: "123 456 78 90"
+    bankgiro: "123-4567"
+    bank-account: ""
+    qr-url: http://localhost:1/qr
+  mail:
+    from: noreply@membership.test

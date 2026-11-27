@@ -1,0 +1,124 @@
+spring:
+  config:
+    import: "optional:configtree:/run/secrets/"
+  datasource:
+    password: ${MYSQL_API_USER_PASSWORD:}
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        type:
+          preferred_uuid_jdbc_type: CHAR
+        default_batch_fetch_size: 100
+  messages:
+    basename: messages
+    fallback-to-system-locale: false
+    encoding: UTF-8
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.ssl.enable: ${SMTP_SSL:false}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${membership.keycloak.url}/realms/${membership.keycloak.realm}
+      client:
+        registration:
+          fgv-membership-service:
+            provider: fgv
+            client-id: ${membership.keycloak.service-client-id}
+            client-secret: ${membership.keycloak.service-client-secret}
+            authorization-grant-type: client_credentials
+        provider:
+          fgv:
+            token-uri: ${membership.keycloak.url}/realms/${membership.keycloak.realm}/protocol/openid-connect/token
+  threads:
+    virtual:
+      enabled: true
+  web:
+    locale: sv
+  graphql:
+    schema:
+      introspection:
+        enabled: false
+    http:
+      path: /api/graphql
+
+management:
+  server:
+    port: 9000
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+
+server:
+  port: 8080
+  request:
+    header:
+      forwarded:
+        strategy: framework
+
+membership:
+  web-url: ${API_WEB_URL:http://localhost:3007}
+  keycloak:
+    url: ${API_KEYCLOAK_URL:https://auth.fgv.local.nu:8443/auth}
+    realm: ${API_KEYCLOAK_REALM:fgv}
+    service-client-id: ${API_KEYCLOAK_SERVICE_CLIENT_ID:fgv-membership-service}
+    service-client-secret: ${API_KEYCLOAK_SERVICE_CLIENT_SECRET:}
+    pending-group: pending-approval
+  turnstile:
+    # Cloudflare's secret key; without it registration is refused (see the local and test profiles)
+    secret-key: ${API_TURNSTILE_SECRET_KEY:}
+  registration:
+    notify-recipients: ${API_REGISTRATION_NOTIFY_RECIPIENTS:}
+  mail:
+    from: ${API_MAIL_FROM:${SMTP_FROM:noreply@localhost}}
+  security:
+    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service,fgv-external-payment-service}
+  # The roles people hold on each application, lowest first. Granting a role grants the ones before it.
+  # Service roles (SYNC, NOTIFY, IMPORT, REVIVAL, ...) are never listed.
+  applications:
+    - client-id: fgv-membership
+      ladder: [USER, BOARD, TREASURER, ADMIN]
+      default-access: true
+    - client-id: fgv-spexregister
+      ladder: [USER, EDITOR, ADMIN]
+    - client-id: fgv-spexipedia
+      ladder: [USER, AUTHOR, EDITOR, ADMIN]
+      default-access: true
+    - client-id: fgv-spexify
+      ladder: [USER, EDITOR, ADMIN]
+    - client-id: fgv-spexflix
+      ladder: [USER, EDITOR, ADMIN]
+    - client-id: fgv-spexgram
+      ladder: [USER, EDITOR, ADMIN]
+    - client-id: fgv-archive
+      ladder: [USER, EDITOR, ADMIN]
+    - client-id: fgv-revival
+      ladder: [USER, OBSERVER, SUPER_ADMIN]
+  data:
+    # Replaces everything with sample data at every start (never in the production profile), see spec 5.10
+    import-sample-data: ${API_IMPORT_SAMPLE_DATA:false}
+    # Where the sample bank statements are written, for uploading by hand
+    statement-dir: ${API_SAMPLE_STATEMENT_DIR:./sample-data}
+  sync:
+    # Told after each change to memberships (Spexregister's /api/sync/notify); empty relies on the consumers' pulls
+    notify-urls: ${API_SYNC_NOTIFY_URLS:}
+  spexregister:
+    # Who the spexare are: read with the MEMBERSHIP role of fgv-membership-service
+    graphql-url: ${API_SPEXREGISTER_GRAPHQL_URL:http://spexregister-api:8080/api/graphql}
+  payment:
+    swish-number: ${API_PAYMENT_SWISH_NUMBER:}
+    bankgiro: ${API_PAYMENT_BANKGIRO:}
+    bank-account: ${API_PAYMENT_BANK_ACCOUNT:}
+    payee-name: ${API_PAYMENT_PAYEE_NAME:FGV}
+  default-access:
+    # Applications that new accounts made from an outside payment get no access to (comma separated client ids)
+    excluded: ${API_DEFAULT_ACCESS_EXCLUDED:fgv-revival}

@@ -1,0 +1,12 @@
+# For running on a developer's machine: Turnstile's own test key always passes, and without a key the check is skipped
+membership:
+  turnstile:
+    skip-without-key: true
+
+# Next to the other FGV applications' APIs on a developer's machine (Spexregister 8080, Nyuppsättning 8081, ... Spexipedia 8088)
+server:
+  port: 8090
+
+management:
+  server:
+    port: 9010

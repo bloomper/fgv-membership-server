@@ -1,0 +1,33 @@
+enum ChangeKind {
+    "The membership counts now, as the record says"
+    UPSERT
+    "The membership no longer counts"
+    DELETE
+}
+
+extend type Query {
+    "SYNC. Changes to memberships that count (PAID and WAIVED) and their removal, oldest first, after the cursor (null for the start). At most 500 a page; asking for a page tells that the caller has read up to the cursor."
+    membershipChanges(after: String, first: Int): MembershipChangePage!
+}
+
+type MembershipChangePage {
+    changes: [MembershipChange!]!
+    "Pass as after for the next page; the same as after when there was nothing new."
+    cursor: String
+    hasMore: Boolean!
+}
+
+"The record is as it was right after the change, so that applying the changes in order gives the same copy."
+type MembershipChange {
+    sequence: String!
+    "The membership's id here"
+    id: ID!
+    kind: ChangeKind!
+    spexareId: ID!
+    "FGV"
+    type: String!
+    year: Int!
+    "From year onwards, so that year is the first one"
+    lifetime: Boolean!
+    at: String!
+}

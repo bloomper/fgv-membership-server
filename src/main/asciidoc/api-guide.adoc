@@ -1,0 +1,145 @@
+= Medlemskap Server HTTP API Guide
+:doctype: book
+:icons: font
+:source-highlighter: highlightjs
+:toc: left
+:toclevels: 3
+
+[[introduction]]
+== Introduction
+
+The application's API is GraphQL, at `/api/graphql` (see the GraphQL API guide). The plain HTTP endpoints are these. All
+but registration and personal links need an access token from Keycloak; errors are `{"error": "..."}` with the status that
+fits (`400` for an invalid request, `401`/`403` for the wrong or no token, `429` for too many tries, `503` when something this
+server depends on is down).
+
+[[registration]]
+== Registration
+
+Registering an account is done here; Keycloak's own registration is off. The endpoints are public and guarded by
+Cloudflare Turnstile and rate limits. An address that already has an account gets the same answer, and an email about it.
+
+=== Register
+
+`POST /api/registration`
+
+include::{snippets}/registration-register/http-request.adoc[]
+include::{snippets}/registration-register/request-fields.adoc[]
+include::{snippets}/registration-register/http-response.adoc[]
+
+`400` with `challenge-failed` when Turnstile does not pass, and `429` with `rate-limited`. The account is made without a
+password, in the group of users who wait for approval. An administrator gives it access to an application, which approves it.
+
+=== Verify the address
+
+The email has a link to the web; the page asks the user to press a button, so that mail scanners do not use up the token.
+The button calls:
+
+`POST /api/registration/verify`
+
+include::{snippets}/registration-verify/http-request.adoc[]
+include::{snippets}/registration-verify/request-fields.adoc[]
+include::{snippets}/registration-verify/http-response.adoc[]
+
+The token works once, for 48 hours. The administrators are emailed, and Keycloak emails the user a link to choose a password.
+
+[[personal]]
+== Personal links
+
+People who pay without logging in get a link with a long random token (`https://<web>/pay/<token>`); it opens one payment
+request and nothing else, until the end of the year. Only the token's hash is stored.
+
+=== The payment request
+
+`GET /api/personal/{token}`
+
+include::{snippets}/personal-link-page/http-request.adoc[]
+include::{snippets}/personal-link-page/path-parameters.adoc[]
+include::{snippets}/personal-link-page/response-fields.adoc[]
+include::{snippets}/personal-link-page/http-response.adoc[]
+
+=== I have paid
+
+`POST /api/personal/{token}/report`
+
+include::{snippets}/personal-link-report/http-request.adoc[]
+include::{snippets}/personal-link-report/request-fields.adoc[]
+include::{snippets}/personal-link-report/http-response.adoc[]
+
+=== Don't remind me again
+
+`POST /api/personal/{token}/opt-out`
+
+include::{snippets}/personal-link-opt-out/http-request.adoc[]
+include::{snippets}/personal-link-opt-out/http-response.adoc[]
+
+A token that is wrong or has expired is answered `404`.
+
+[[external]]
+== Other applications that take payments
+
+An application where members pay (a shop, say) tells Medlemskap that someone paid, and can ask whether an address has an
+account and a membership. Each such application has its own Keycloak service client with the role `PAYMENT` on
+`fgv-membership`; the first is `fgv-external-payment-service`. It gets a token with the client credentials grant and sends it
+as `Authorization: Bearer ...`. The API is on its own hostname (`API_HOST` in the deployment).
+
+=== Tell that someone paid
+
+`POST /api/external/payments`
+
+The address is the identifier. The *spexare* is found in Spexregister by the address, or created there (not published). The
+*account* is found in Keycloak by the address; if there is none, one is created with the default access of the kind of
+membership (see *Default access* in the web), and the person gets an email saying so and, from the login service, a link to
+choose a password. An account that exists is never changed. The payment is recorded as a matched payment request, the
+membership counts at once, the member gets a receipt, and the administrators are emailed.
+
+`paymentReference` is the application's own id for the payment (an order or transaction id). It is kept with the payment,
+shown to the treasurer and in the bookkeeping export, and the same id from the same application is the same payment, so
+retrying is safe. Without one nothing protects against being told twice, except that a person who is a member for the year
+already is not recorded again.
+
+include::{snippets}/external-payment/http-request.adoc[]
+include::{snippets}/external-payment/request-headers.adoc[]
+include::{snippets}/external-payment/request-fields.adoc[]
+include::{snippets}/external-payment/http-response.adoc[]
+include::{snippets}/external-payment/response-fields.adoc[]
+
+`201` means recorded. `200` means that it was told before (`DUPLICATE`) or that the person was a member for the year already
+(`ALREADY_MEMBER`: nothing was recorded, and a refund may be due, which the administrators are told). `400`:
+
+include::{snippets}/external-payment-invalid/http-response.adoc[]
+
+`503` means that Spexregister or Keycloak could not be reached: nothing was recorded, and the request can be sent again.
+Each step finds what an earlier try made, so a retry picks up where it stopped.
+
+=== Ask about an address
+
+`GET /api/external/lookup?email=...&year=...`
+
+include::{snippets}/external-lookup/http-request.adoc[]
+include::{snippets}/external-lookup/request-headers.adoc[]
+include::{snippets}/external-lookup/query-parameters.adoc[]
+include::{snippets}/external-lookup/http-response.adoc[]
+include::{snippets}/external-lookup/response-fields.adoc[]
+
+A member is someone whose membership for the year is paid or granted; a life membership counts in its first year and every
+year after it. `503` when Spexregister cannot be reached: the answer is never guessed.
+
+[[exports]]
+== Excel exports
+
+`GET /api/exports/members.xlsx?year=` (`BOARD`): the year's members, by name. `GET /api/exports/payments.xlsx?year=`
+(`TREASURER`): the year's payments for the bookkeeping, with date, amount, reference, member, how, what they were matched to
+and the other application's payment id. Both answer an Excel workbook (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
+
+include::{snippets}/export-members/http-request.adoc[]
+include::{snippets}/export-payments/http-request.adoc[]
+
+[[spexregister]]
+== Notice from Spexregister
+
+`POST /api/sync/spexare-deleted` with a token holding `SYNC`: Spexregister tells that a spexare was deleted. Medlemskap
+keeps the memberships and payments, which are bookkeeping records, and marks them as belonging to a deleted spexare.
+
+include::{snippets}/sync-spexare-deleted/http-request.adoc[]
+include::{snippets}/sync-spexare-deleted/request-fields.adoc[]

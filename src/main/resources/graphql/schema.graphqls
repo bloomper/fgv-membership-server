@@ -1,0 +1,82 @@
+enum UserStatus {
+    "Verified the address and waits for access to an application"
+    PENDING
+    "Has access and may log in"
+    ACTIVE
+    "Switched off in Keycloak"
+    DEACTIVATED
+    "Registered but has not followed the link in the verification email"
+    UNVERIFIED
+}
+
+type Query {
+    "Users, for administrators. The status filter is applied to the page found, except PENDING, which lists the group"
+    users(search: String, status: UserStatus, first: Int, max: Int): UserPage!
+    user(id: ID!): AccountUser!
+    "The applications whose access is administered"
+    applications: [ApplicationInfo!]!
+}
+
+type Mutation {
+    setUserEnabled(id: ID!, enabled: Boolean!): AccountUser!
+    """
+    Sets the highest role on an application: roles below it are given, roles above it taken away. null removes access.
+    notify says whether the user is emailed about this update (the administrator chooses each time).
+    """
+    setApplicationAccess(userId: ID!, clientId: String!, role: String, notify: Boolean = true): ApplicationAccess!
+    "Deletes an account that waits for approval. With notify the user is told by email, with the optional message."
+    rejectUser(id: ID!, message: String, notify: Boolean = true): Boolean!
+    updateUser(id: ID!, input: UserInput!): AccountUser!
+    resendVerification(id: ID!): Boolean!
+    sendSetPasswordEmail(id: ID!): Boolean!
+    sendPasswordResetEmail(id: ID!): Boolean!
+}
+
+input UserInput {
+    firstName: String!
+    lastName: String!
+    email: String!
+    locale: String
+}
+
+type UserPage {
+    items: [AccountUser!]!
+    total: Int!
+}
+
+type AccountUser {
+    id: ID!
+    email: String
+    firstName: String
+    lastName: String
+    displayName: String!
+    locale: String
+    enabled: Boolean!
+    emailVerified: Boolean!
+    status: UserStatus!
+    createdAt: String
+    registrationMessage: String
+    "Empty in lists; filled when a single user is fetched"
+    access: [ApplicationAccess!]!
+}
+
+type ApplicationAccess {
+    clientId: String!
+    name: String!
+    url: String
+    ladder: [String!]!
+    held: [String!]!
+    highest: String
+    enabled: Boolean!
+    "False when the roles in Keycloak do not follow the ladder; saving repairs them"
+    consistent: Boolean!
+    defaultAccess: Boolean!
+}
+
+type ApplicationInfo {
+    clientId: String!
+    name: String!
+    url: String
+    ladder: [String!]!
+    defaultAccess: Boolean!
+}
