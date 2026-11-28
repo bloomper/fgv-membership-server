@@ -16,6 +16,7 @@
 
 package nu.fgv.membership.server.membership;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +54,7 @@ public class MembershipFeed {
     }
 
     @Transactional
-    public Page read(final String clientId, final String after, final Integer first) {
+    public Page read(final String clientId, final @Nullable String after, final @Nullable Integer first) {
         final long from = parse(after);
         final int size = first == null ? MAX_PAGE : Math.max(1, Math.min(first, MAX_PAGE));
         final List<MembershipChange> found = changes.findBySequenceGreaterThanOrderBySequence(from, PageRequest.of(0, size));

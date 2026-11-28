@@ -16,6 +16,7 @@
 
 package nu.fgv.membership.server.membership;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.graphql.data.method.annotation.SchemaMapping;
@@ -39,8 +40,8 @@ public class MembershipFeedApi {
 
     @QueryMapping
     @PreAuthorize("hasRole('fgv-membership_SYNC')")
-    public MembershipFeed.Page membershipChanges(@AuthenticationPrincipal final Jwt caller, @Argument final String after,
-                                                 @Argument final Integer first) {
+    public MembershipFeed.Page membershipChanges(@AuthenticationPrincipal final Jwt caller, @Argument final @Nullable String after,
+                                                 @Argument final @Nullable Integer first) {
         return feed.read(caller.getClaimAsString("azp"), after, first);
     }
 

@@ -22,6 +22,7 @@ import nu.fgv.membership.server.config.MembershipProperties;
 import nu.fgv.membership.server.keycloak.KeycloakAdmin;
 import nu.fgv.membership.server.keycloak.KeycloakUser;
 import nu.fgv.membership.server.registration.RegistrationRepository;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -52,7 +53,7 @@ public class UserAdminService {
      * @param search matched against name and email
      * @param status only users with this status; the filter is applied to the page found, except {@code PENDING}, which lists the group
      */
-    public Page list(final String search, final UserStatus status, final int first, final int max) {
+    public Page list(final @Nullable String search, final @Nullable UserStatus status, final int first, final int max) {
         if (status == UserStatus.PENDING) {
             final List<AccountUser> pending = keycloak.groupMembers(properties.keycloak().pendingGroup(), first, max).stream()
                     .map(user -> summarize(user, UserStatus.PENDING)).toList();
