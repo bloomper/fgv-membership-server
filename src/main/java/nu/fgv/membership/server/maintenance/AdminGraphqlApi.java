@@ -19,6 +19,7 @@ package nu.fgv.membership.server.maintenance;
 import nu.fgv.membership.server.board.AuditLogService;
 import nu.fgv.membership.server.board.AuditService;
 import nu.fgv.membership.server.payment.PaymentSettings;
+import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -83,7 +84,24 @@ public class AdminGraphqlApi {
     }
 
     @QueryMapping
-    public List<AuditLogService.Line> auditLog(@Argument final Integer first, @Argument final Integer max) {
-        return auditLog.page(first == null ? 0 : first, max == null ? 50 : max);
+    public List<AuditLogService.Line> auditLog(@Argument final @Nullable Integer first, @Argument final @Nullable Integer max,
+                                               @Argument final @Nullable String action, @Argument final @Nullable String actor,
+                                               @Argument final @Nullable String from, @Argument final @Nullable String to,
+                                               @Argument final @Nullable String q) {
+        try {
+            return auditLog.page(first == null ? 0 : first, max == null ? 50 : max, new AuditLogService.Filter(action, actor, from, to, q));
+        } catch (final java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("A date is yyyy-mm-dd");
+        }
+    }
+
+    @QueryMapping
+    public List<String> auditActions() {
+        return auditLog.actions();
+    }
+
+    @QueryMapping
+    public List<AuditLogService.Actor> auditActors() {
+        return auditLog.actors();
     }
 }

@@ -146,11 +146,40 @@ class RevivalApplicationAndAdminIntegrationTest extends AbstractPaymentIntegrati
     }
 
     @Test
+    void theAuditLogIsFilteredByActionPersonPeriodAndWords() {
+        final String id = createUser("filtrerad@membership.test", "Filtrerad", List.of());
+
+        graphQl(userToken(ADMIN)).document("mutation($u: ID!) { setApplicationAccess(userId: $u, clientId: \"fgv-spexify\", role: \"EDITOR\", notify: false) { highest } }").variable("u", id)
+                .execute().errors().verify();
+        graphQl(userToken(ADMIN)).document("mutation { runMaintenanceJob(name: \"PAYMENT_REMINDERS\") { name } }").execute().errors().verify();
+
+        final String today = java.time.LocalDate.now(java.time.ZoneId.of("Europe/Stockholm")).toString();
+
+        graphQl(userToken(ADMIN)).document("{ auditActions auditActors { id name } }").execute().errors().verify()
+                .path("auditActions").entityList(String.class).contains("ACCESS_ACCESS", "JOB_RUN")
+                .path("auditActors[*].name").entityList(String.class).contains("Anna Test");
+        graphQl(userToken(ADMIN)).document("{ auditLog(action: \"JOB_RUN\") { action } }").execute().errors().verify()
+                .path("auditLog[*].action").entityList(String.class).satisfies(actions -> assertThat(actions).isNotEmpty().containsOnly("JOB_RUN"));
+        graphQl(userToken(ADMIN)).document("query($q: String) { auditLog(q: $q) { action subject } }").variable("q", "spexify EDITOR").execute().errors().verify()
+                .path("auditLog[*].subject").entityList(String.class).containsExactly(id);
+        graphQl(userToken(ADMIN)).document("query($d: String) { auditLog(from: $d, to: $d) { action } }").variable("d", today).execute().errors().verify()
+                .path("auditLog").entityList(Object.class).hasSize(2);
+        graphQl(userToken(ADMIN)).document("{ auditLog(to: \"2000-01-01\") { action } }").execute().errors().verify()
+                .path("auditLog").entityList(Object.class).hasSize(0);
+        graphQl(userToken(ADMIN)).document("{ auditLog(actor: \"nobody\") { action } }").execute().errors().verify()
+                .path("auditLog").entityList(Object.class).hasSize(0);
+        graphQl(userToken(ADMIN)).document("{ auditLog(from: \"28/11\") { action } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
+    }
+
+    @Test
     void theMaintenanceJobsRunOnDemandAndSayWhatTheyDid() {
         graphQl(userToken(ADMIN)).document("{ maintenanceJobs { name lastRun } }").execute().errors().verify()
                 .path("maintenanceJobs").entityList(Object.class).satisfies(jobs -> assertThat(jobs).hasSizeGreaterThanOrEqualTo(5));
-        graphQl(userToken(ADMIN)).document("mutation { runMaintenanceJob(name: \"PAYMENT_REMINDERS\") { name lastRun lastResult } }").execute().errors().verify()
-                .path("runMaintenanceJob.lastResult").entity(String.class).isEqualTo("0 handled");
+        graphQl(userToken(ADMIN)).document("mutation { runMaintenanceJob(name: \"PAYMENT_REMINDERS\") { name lastRun lastResult lastSucceeded handled schedule } }").execute().errors().verify()
+                .path("runMaintenanceJob.lastResult").entity(String.class).isEqualTo("0 handled")
+                .path("runMaintenanceJob.lastSucceeded").entity(Boolean.class).isEqualTo(true)
+                .path("runMaintenanceJob.handled").entity(Integer.class).isEqualTo(0)
+                .path("runMaintenanceJob.schedule").entity(String.class).isEqualTo("0 10 * * * *");
         graphQl(userToken(ADMIN)).document("mutation { runMaintenanceJob(name: \"NOPE\") { name } }").execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
     }
 
