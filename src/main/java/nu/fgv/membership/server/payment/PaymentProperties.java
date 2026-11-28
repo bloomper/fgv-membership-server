@@ -36,7 +36,7 @@ import java.time.Duration;
  */
 @ConfigurationProperties("membership.payment")
 public record PaymentProperties(String swishNumber, String bankAccount, @DefaultValue("FGV") String payeeName,
-                                @DefaultValue("https://mpc.getswish.net/qrg-swish/api/v1/commerce") String qrUrl,
+                                @DefaultValue("https://mpc.getswish.net/qrg-swish/api/v1/prefilled") String qrUrl,
                                 @DefaultValue("3d") Duration reminderAfter,
                                 @DefaultValue("FGV") String membershipType) {
 }

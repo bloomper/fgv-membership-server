@@ -77,11 +77,27 @@ public class RenewalService {
         this.webUrl = webUrl;
     }
 
+    static final int MAX_SUBJECT = 200;
+    static final int MAX_MESSAGE = 4000;
+
     /**
-     * @param count  how many would be reminded
-     * @param sample the first few, by name
+     * @param count      how many would be reminded
+     * @param sample     the first few, by name
+     * @param subject    the email's subject, which the board may change
+     * @param text       what the reminder does, for the board
+     * @param message    the email's greeting, which the board may change
+     * @param details    the rest of the email, which the board cannot change, with an example reference and link
+     * @param recipients everyone who would be reminded, by name
      */
-    public record Preview(int year, int count, List<String> sample, String subject, String text) {
+    public record Preview(int year, int count, List<String> sample, String subject, String text, String message, String details,
+                          List<Recipient> recipients) {
+    }
+
+    /**
+     * @param name     null when Spexregister does not know the spexare
+     * @param hasEmail false for someone who would be skipped
+     */
+    public record Recipient(String spexareId, String name, boolean hasEmail) {
     }
 
     /**
@@ -110,23 +126,45 @@ public class RenewalService {
     public Preview preview(final int year, final String feeLevelId) {
         final FeeLevel fee = fee(year, feeLevelId);
         final List<String> ids = group(year);
-        final List<String> sample = ids.isEmpty() ? List.of() : spexregister.byIds(ids.subList(0, Math.min(10, ids.size()))).stream().map(Spexare::name).toList();
+        final Map<String, Spexare> people = people(ids);
+        final List<Recipient> recipients = ids.stream().map(id -> {
+            final Spexare spexare = people.get(id);
 
-        return new Preview(year, ids.size(), sample, "Förnya ditt medlemskap i FGV",
-                "Dags att förnya medlemskapet i FGV för %d: %d kr, med en personlig länk för att betala. Mottagaren kan välja att inte få fler påminnelser. Familje- och stödmedlemskap påminns inte här: styrelsen ber dem att betala från medlemmens sida.".formatted(year, fee.getAmount()));
+            return new Recipient(id, spexare == null ? null : spexare.name(), spexare != null && spexare.email() != null && !spexare.email().isBlank());
+        }).toList();
+        final List<String> sample = recipients.stream().limit(10).map(Recipient::name).filter(java.util.Objects::nonNull).toList();
+        final String exampleReference = "FGV%02d····".formatted(year % 100);
+
+        return new Preview(year, ids.size(), sample, mails.renewalSubject(),
+                "Dags att förnya medlemskapet i FGV för %d: %d kr, med en personlig länk för att betala. Mottagaren kan välja att inte få fler påminnelser. Familje- och stödmedlemskap påminns inte här: styrelsen ber dem att betala från medlemmens sida.".formatted(year, fee.getAmount()),
+                mails.renewalIntro(year), mails.renewalDetails(fee.getAmount(), exampleReference, mails.renewalExampleLink()), recipients);
+    }
+
+    /**
+     * Sends the reminders with the default subject and greeting.
+     */
+    public Result send(final String actor, final int year, final String feeLevelId) {
+        return send(actor, year, feeLevelId, null, null);
     }
 
     /**
      * Sends the reminders. Each member is handled on its own: one who fails does not stop the others.
+     *
+     * @param subject the subject the board wrote, or null or blank for the default
+     * @param message the greeting the board wrote, or null or blank for the default; the payment details and the personal
+     *                link always follow it
      */
-    public Result send(final String actor, final int year, final String feeLevelId) {
+    public Result send(final String actor, final int year, final String feeLevelId, final String subject, final String message) {
         final FeeLevel fee = fee(year, feeLevelId);
-        final List<String> ids = group(year);
-        final Map<String, Spexare> people = new HashMap<>();
+        final String mailSubject = text(subject, MAX_SUBJECT, "subject").orElseGet(mails::renewalSubject);
+        final String mailIntro = text(message, MAX_MESSAGE, "message").orElseGet(() -> mails.renewalIntro(year));
 
-        for (int i = 0; i < ids.size(); i += 500) {
-            spexregister.byIds(ids.subList(i, Math.min(ids.size(), i + 500))).forEach(spexare -> people.put(spexare.id(), spexare));
+        if (mailSubject.contains("\n") || mailSubject.contains("\r")) {
+            throw new IllegalArgumentException("The subject must be one line");
         }
+
+        final List<String> ids = group(year);
+        final Map<String, Spexare> people = people(ids);
 
         final String campaign = UUID.randomUUID().toString();
         final List<String[]> sent = new ArrayList<>();
@@ -143,7 +181,7 @@ public class RenewalService {
                 final PaymentView request = payments.request(spexareId, actor, List.of(fee.getId()));
                 final String token = links.create(payments.entity(request.id()));
 
-                if (mails.paymentLink(spexare, request, webUrl + "/pay/" + token, true)) {
+                if (mails.renewal(spexare, request, webUrl + "/pay/" + token, mailSubject, mailIntro)) {
                     sent.add(new String[]{spexareId, request.id()});
                 } else {
                     skipped++;
@@ -164,6 +202,25 @@ public class RenewalService {
                 .param("c", pk).param("s", pair[0]).param("r", pair[1]).param("at", Timestamp.from(clock.instant())).update());
         audit.log(actor, "RENEWAL_REMINDERS", String.valueOf(year), "%d sent, %d skipped".formatted(sent.size(), skipped));
         return new Result(sent.size(), skipped);
+    }
+
+    private Map<String, Spexare> people(final List<String> ids) {
+        final Map<String, Spexare> people = new HashMap<>();
+
+        for (int i = 0; i < ids.size(); i += 500) {
+            spexregister.byIds(ids.subList(i, Math.min(ids.size(), i + 500))).forEach(spexare -> people.put(spexare.id(), spexare));
+        }
+        return people;
+    }
+
+    private static java.util.Optional<String> text(final String value, final int max, final String what) {
+        if (value == null || value.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        if (value.strip().length() > max) {
+            throw new IllegalArgumentException("The %s can be at most %d characters".formatted(what, max));
+        }
+        return java.util.Optional.of(value.strip());
     }
 
     private FeeLevel fee(final int year, final String feeLevelId) {

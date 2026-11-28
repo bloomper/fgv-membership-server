@@ -37,10 +37,17 @@ type Settings {
 }
 
 type MaintenanceJob {
+    "PAYMENT_REMINDERS, BANK_CLEANUP, UNVERIFIED_REGISTRATIONS, APPLICATION_CLEANUP or EXPIRED_PERSONAL_LINKS"
     name: String!
     description: String!
+    "When it runs by itself, as a cron expression (seconds first), in Swedish time"
+    schedule: String!
     lastRun: String
     lastResult: String
+    "Null when it never ran"
+    lastSucceeded: Boolean
+    "How many things the last run handled; null when it failed or never ran"
+    handled: Int
 }
 
 type AuditLine {

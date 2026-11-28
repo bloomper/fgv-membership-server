@@ -12,8 +12,11 @@ extend type Query {
 }
 
 extend type Mutation {
-    "BOARD. Sends a renewal reminder with a payment request and a personal link to everyone in the group."
-    sendRenewals(year: Int!, feeLevelId: ID!): RenewalResult!
+    """
+    BOARD. Sends a renewal reminder with a payment request and a personal link to everyone in the group. subject and message
+    replace the default subject and greeting (empty keeps them); the payment details and the personal link always follow.
+    """
+    sendRenewals(year: Int!, feeLevelId: ID!, subject: String, message: String): RenewalResult!
     "BOARD. Grants a membership without a fee, for the year or for life from it. The note says why."
     grantWaiver(spexareId: ID!, year: Int!, lifetime: Boolean! = false, note: String!): MemberItem!
     "BOARD. Records a payment that has no request yet: the request is made and paid at once."
@@ -52,9 +55,26 @@ type MemberCount {
 type RenewalPreview {
     year: Int!
     count: Int!
+    "The first few by name"
     sample: [String!]!
+    "The default subject, which the board may change (at most 200 characters, one line)"
     subject: String!
+    "What the reminder does, for the board"
     text: String!
+    "The default greeting, which the board may change (at most 4000 characters)"
+    message: String!
+    "The rest of the email, which follows the greeting and cannot be changed, with an example reference and link"
+    details: String!
+    "Everyone who would be reminded"
+    recipients: [RenewalRecipient!]!
+}
+
+type RenewalRecipient {
+    spexareId: ID!
+    "Null when Spexregister does not know the spexare"
+    name: String
+    "False for someone without an email address, who would be skipped"
+    hasEmail: Boolean!
 }
 
 type RenewalResult {
