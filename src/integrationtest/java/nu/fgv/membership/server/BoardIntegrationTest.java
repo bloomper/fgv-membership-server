@@ -67,16 +67,28 @@ class BoardIntegrationTest extends AbstractPaymentIntegrationTest {
         record(requestPayment(lastYear), 200);
         MAIL.getReceivedMessages();
 
-        graphQl(userToken(BOARD)).document("query($y: Int!, $f: ID!) { renewalPreview(year: $y, feeLevelId: $f) { count sample } }").variable("y", YEAR).variable("f", thisYear)
+        graphQl(userToken(BOARD)).document("query($y: Int!, $f: ID!) { renewalPreview(year: $y, feeLevelId: $f) { count sample subject message details recipients { name hasEmail } } }")
+                .variable("y", YEAR).variable("f", thisYear)
                 .execute().errors().verify().path("renewalPreview.count").entity(Integer.class).isEqualTo(1)
-                .path("renewalPreview.sample[0]").entity(String.class).isEqualTo("Greta Test");
+                .path("renewalPreview.sample[0]").entity(String.class).isEqualTo("Greta Test")
+                .path("renewalPreview.recipients[0].name").entity(String.class).isEqualTo("Greta Test")
+                .path("renewalPreview.recipients[0].hasEmail").entity(Boolean.class).isEqualTo(true)
+                .path("renewalPreview.subject").entity(String.class).isEqualTo("Förnya ditt medlemskap i FGV")
+                .path("renewalPreview.message").entity(String.class).satisfies(message -> assertThat(message).contains(String.valueOf(YEAR)))
+                .path("renewalPreview.details").entity(String.class).satisfies(details -> assertThat(details).contains("220 kr"));
 
-        graphQl(userToken(BOARD)).document("mutation($y: Int!, $f: ID!) { sendRenewals(year: $y, feeLevelId: $f) { sent skipped } }").variable("y", YEAR).variable("f", thisYear)
+        // A subject on more than one line is refused
+        graphQl(userToken(BOARD)).document("mutation($y: Int!, $f: ID!) { sendRenewals(year: $y, feeLevelId: $f, subject: \"Två\\nrader\") { sent } }").variable("y", YEAR).variable("f", thisYear)
+                .execute().errors().satisfy(errors -> assertThat(errors).isNotEmpty());
+
+        // The board's subject and greeting, as written (an apostrophe is not a message pattern), then the fixed part
+        graphQl(userToken(BOARD)).document("mutation($y: Int!, $f: ID!, $s: String, $m: String) { sendRenewals(year: $y, feeLevelId: $f, subject: $s, message: $m) { sent skipped } }")
+                .variable("y", YEAR).variable("f", thisYear).variable("s", "Dags igen!").variable("m", "Hej spexare, det är dags {0} igen. Don't wait!")
                 .execute().errors().verify().path("sendRenewals.sent").entity(Integer.class).isEqualTo(1);
 
-        final var reminder = mailWhere(message -> subject(message).contains("Förnya"));
+        final var reminder = mailWhere(message -> subject(message).equals("Dags igen!"));
 
-        assertThat(body(reminder)).contains("220 kr").contains("/pay/");
+        assertThat(body(reminder)).startsWith("Hej spexare, det är dags {0} igen. Don't wait!").contains("220 kr").contains("/pay/");
 
         final String token = LINK.matcher(body(reminder)).results().findFirst().orElseThrow().group(1);
 

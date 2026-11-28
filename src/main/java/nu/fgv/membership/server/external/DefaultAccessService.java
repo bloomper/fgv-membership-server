@@ -54,7 +54,7 @@ public class DefaultAccessService {
     public DefaultAccessService(final DefaultAccessRepository defaults, final AppSettingRepository settings,
                                 final ApplicationCatalog catalog, final AccessService access, final MembershipProperties properties,
                                 @Value("${membership.default-access.excluded:fgv-revival}") final List<String> excluded,
-                                @Value("${membership.default-access.support-applications:fgv-spexipedia,fgv-spexflix,fgv-spexgram,fgv-spexify}") final List<String> supportApplications) {
+                                @Value("${membership.default-access.support-applications:fgv-membership,fgv-spexipedia,fgv-spexflix,fgv-spexgram,fgv-spexify}") final List<String> supportApplications) {
         this.defaults = defaults;
         this.settings = settings;
         this.catalog = catalog;
@@ -138,7 +138,7 @@ public class DefaultAccessService {
     /**
      * Written down the first time it is read, so what admins change stays changed. The full memberships start with the
      * lowest role of every application except those excluded (Nyuppsättning); a support membership starts with the lowest
-     * role of Spexipedia, Spexflix, Spexgram and Spexify.
+     * role of Medlemskap, Spexipedia, Spexflix, Spexgram and Spexify.
      */
     private void seed(final AccessProfile profile) {
         final String flag = profile == AccessProfile.SUPPORT ? SEEDED_SUPPORT : SEEDED;

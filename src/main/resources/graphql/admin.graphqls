@@ -3,8 +3,15 @@ extend type Query {
     settings: Settings!
     "ADMIN. The maintenance jobs with when they last ran and what they did."
     maintenanceJobs: [MaintenanceJob!]!
-    "ADMIN. Who changed what, newest first, including changes to users' access."
-    auditLog(first: Int = 0, max: Int = 50): [AuditLine!]!
+    """
+    ADMIN. Who changed what, newest first, including changes to users' access. Filtered by an action, a person (account
+    id), a period (from and to are days, yyyy-mm-dd, both included) and words that must all be in the subject or details.
+    """
+    auditLog(first: Int = 0, max: Int = 50, action: String, actor: ID, from: String, to: String, q: String): [AuditLine!]!
+    "ADMIN. The actions in the audit log, for filtering on."
+    auditActions: [String!]!
+    "ADMIN. Everyone who has changed something, for filtering on."
+    auditActors: [AuditActor!]!
 }
 
 extend type Mutation {
@@ -48,6 +55,12 @@ type MaintenanceJob {
     lastSucceeded: Boolean
     "How many things the last run handled; null when it failed or never ran"
     handled: Int
+}
+
+type AuditActor {
+    id: ID!
+    "From Keycloak; empty when the account is gone"
+    name: String
 }
 
 type AuditLine {

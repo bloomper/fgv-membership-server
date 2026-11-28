@@ -467,8 +467,8 @@ public class SampleDataImporter implements ApplicationRunner {
     }
 
     private void auditTrail(final List<Spexare> spexare, final Instant now) {
-        audit.save(new AuditEntry(TREASURER, "PAYMENT", spexare.get(2).id(), "Kontant betalning", now.minus(Duration.ofDays(6))));
-        audit.save(new AuditEntry(ADMIN, "FEE", null, "Avgifter för nästa år", now.minus(Duration.ofDays(20))));
+        audit.save(new AuditEntry(TREASURER, "PAYMENT_RECORDED", spexare.get(2).id(), "Kontant betalning", now.minus(Duration.ofDays(6))));
+        audit.save(new AuditEntry(ADMIN, "FEE_ADDED", null, "Avgifter för nästa år", now.minus(Duration.ofDays(20))));
         accessChanges.save(new AccessChange(EDITOR, ADMIN, "ACCESS", "fgv-membership", "USER", "USER,BOARD"));
     }
 
