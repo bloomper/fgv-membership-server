@@ -19,6 +19,7 @@ package nu.fgv.membership.server.board;
 import nu.fgv.membership.server.payment.PaymentHow;
 import nu.fgv.membership.server.payment.PaymentView;
 import nu.fgv.membership.server.payment.Spexare;
+import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -77,8 +78,9 @@ public class BoardGraphqlApi {
     }
 
     @MutationMapping
-    public RenewalService.Result sendRenewals(@AuthenticationPrincipal final Jwt caller, @Argument final int year, @Argument final String feeLevelId) {
-        return renewals.send(caller.getSubject(), year, feeLevelId);
+    public RenewalService.Result sendRenewals(@AuthenticationPrincipal final Jwt caller, @Argument final int year, @Argument final String feeLevelId,
+                                              @Argument final @Nullable String subject, @Argument final @Nullable String message) {
+        return renewals.send(caller.getSubject(), year, feeLevelId, subject, message);
     }
 
     @MutationMapping

@@ -107,16 +107,49 @@ public class PaymentMails {
     }
 
     /**
-     * A request to pay with a personal link: the renewal reminder, or a request the board made.
+     * A request to pay with a personal link that the board made.
      */
-    public boolean paymentLink(final Spexare spexare, final PaymentView request, final String link, final boolean renewal) {
+    public boolean paymentLink(final Spexare spexare, final PaymentView request, final String link) {
+        return sendLink(spexare, mailer.text(LOCALE, "mail.link.subject"), mailer.text(LOCALE, "mail.link.body", request.amount(), request.reference(), link,
+                request.memberships().stream().map(item -> String.valueOf(item.year())).reduce((a, b) -> a + ", " + b).orElse("")));
+    }
+
+    /**
+     * The renewal reminder: the board's greeting, then the payment details and the personal link, which the board cannot
+     * change.
+     *
+     * @param subject the subject the board wrote
+     * @param intro   the greeting the board wrote, as it is (not a message pattern)
+     */
+    public boolean renewal(final Spexare spexare, final PaymentView request, final String link, final String subject, final String intro) {
+        return sendLink(spexare, subject, intro.strip() + "\n\n" + renewalDetails(request.amount(), request.reference(), link));
+    }
+
+    public String renewalSubject() {
+        return mailer.text(LOCALE, "mail.renewal.subject");
+    }
+
+    public String renewalIntro(final int year) {
+        return mailer.text(LOCALE, "mail.renewal.intro", String.valueOf(year));
+    }
+
+    public String renewalDetails(final int amount, final String reference, final String link) {
+        return mailer.text(LOCALE, "mail.renewal.details", amount, reference, link);
+    }
+
+    /**
+     * What stands for the personal link in the preview of a renewal reminder.
+     */
+    public String renewalExampleLink() {
+        return mailer.text(LOCALE, "mail.renewal.example-link");
+    }
+
+    private boolean sendLink(final Spexare spexare, final String subject, final String body) {
         if (spexare.email() == null || spexare.email().isBlank()) {
             return false;
         }
         try {
-            mailer.send(spexare.email(), mailer.text(LOCALE, renewal ? "mail.renewal.subject" : "mail.link.subject"),
-                    mailer.text(LOCALE, renewal ? "mail.renewal.body" : "mail.link.body", request.amount(), request.reference(), link,
-                            request.memberships().stream().map(item -> String.valueOf(item.year())).reduce((a, b) -> a + ", " + b).orElse("")));
+            mailer.send(spexare.email(), subject, body);
             return true;
         } catch (final MailException e) {
             log.error("Could not send a payment link to spexare {}", spexare.id(), e);

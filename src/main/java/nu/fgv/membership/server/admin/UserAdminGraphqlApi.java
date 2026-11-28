@@ -25,6 +25,7 @@ import nu.fgv.membership.server.keycloak.KeycloakAdmin;
 import nu.fgv.membership.server.keycloak.KeycloakUser;
 import nu.fgv.membership.server.mail.Mailer;
 import nu.fgv.membership.server.registration.RegistrationService;
+import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
@@ -65,8 +66,8 @@ public class UserAdminGraphqlApi {
     }
 
     @QueryMapping
-    public UserAdminService.Page users(@Argument final String search, @Argument final UserStatus status,
-                                       @Argument final Integer first, @Argument final Integer max) {
+    public UserAdminService.Page users(@Argument final @Nullable String search, @Argument final @Nullable UserStatus status,
+                                       @Argument final @Nullable Integer first, @Argument final @Nullable Integer max) {
         return users.list(search, status, first == null ? 0 : first, max == null ? 25 : Math.min(max, 100));
     }
 
@@ -89,14 +90,14 @@ public class UserAdminGraphqlApi {
 
     @MutationMapping
     public ApplicationAccess setApplicationAccess(@AuthenticationPrincipal final Jwt actor, @Argument final String userId,
-                                                  @Argument final String clientId, @Argument final String role,
-                                                  @Argument final Boolean notify) {
+                                                  @Argument final String clientId, @Argument final @Nullable String role,
+                                                  @Argument final @Nullable Boolean notify) {
         return access.setAccess(actor.getSubject(), userId, clientId, role, notify == null || notify);
     }
 
     @MutationMapping
-    public boolean rejectUser(@AuthenticationPrincipal final Jwt actor, @Argument final String id, @Argument final String message,
-                              @Argument final Boolean notify) {
+    public boolean rejectUser(@AuthenticationPrincipal final Jwt actor, @Argument final String id, @Argument final @Nullable String message,
+                              @Argument final @Nullable Boolean notify) {
         access.reject(actor.getSubject(), id, message, notify == null || notify);
         return true;
     }

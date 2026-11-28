@@ -64,7 +64,8 @@ together) and `dismissTransaction` do the rest. A file with a row that cannot be
 == The board
 
 `BOARD`: `members` (a year's members with filters), `memberTrend`, `memberDetail`, `spexareSearch`, `renewalPreview` and
-`sendRenewals` (a payment request and a personal link to last year's members who have nothing for the year),
+`sendRenewals` (a payment request and a personal link to last year's members who have nothing for the year, with a
+subject and greeting the board may change; the preview lists every recipient),
 `grantWaiver` (a membership without a fee, with a note), `sendPaymentLink`, and the applications for membership:
 `membershipApplications`, `acceptApplication` (links the account to the spexare, or has one created), `rejectApplication`.
 A user whose account is not linked to a spexare applies with `applyForMembership` and reads `myApplication`.

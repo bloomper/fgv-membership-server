@@ -129,7 +129,7 @@ public class BoardService {
         final String token = links.create(payments.entity(request.id()));
         final Spexare spexare = spexregister.byIds(List.of(spexareId)).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Spexregister does not know that spexare"));
-        final boolean sent = mails.paymentLink(spexare, request, webUrl + "/pay/" + token, false);
+        final boolean sent = mails.paymentLink(spexare, request, webUrl + "/pay/" + token);
 
         if (sent) {
             jdbc.sql("INSERT INTO reminder_email (campaign_pk, spexare_id, request_id, kind, sent_at) VALUES (NULL, :s, :r, 'LINK', NOW(6))")

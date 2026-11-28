@@ -21,6 +21,7 @@ import nu.fgv.membership.server.keycloak.KeycloakAdmin;
 import nu.fgv.membership.server.keycloak.KeycloakUser;
 import nu.fgv.membership.server.mail.AccessMails;
 import nu.fgv.membership.server.util.security.MembershipRole;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -75,7 +76,7 @@ public class AccessService {
      * @param notify whether to email the user about this update; chosen by the administrator for each update. A user
      *               who is given their first access is moved out of the pending group either way.
      */
-    public ApplicationAccess setAccess(final String actor, final String userId, final String clientId, final String role,
+    public ApplicationAccess setAccess(final String actor, final String userId, final String clientId, final @Nullable String role,
                                        final boolean notify) {
         final ApplicationCatalog.Entry entry = catalog.find(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown application " + clientId));
@@ -124,7 +125,7 @@ public class AccessService {
     /**
      * Removes a pending user's account. With {@code notify} the user is told by email, with the optional message.
      */
-    public void reject(final String actor, final String userId, final String message, final boolean notify) {
+    public void reject(final String actor, final String userId, final @Nullable String message, final boolean notify) {
         final KeycloakUser user = keycloak.findUser(userId).orElseThrow(() -> new IllegalArgumentException("Unknown user " + userId));
 
         if (isApproved(user)) {
