@@ -87,7 +87,7 @@ public abstract class AbstractIntegrationTest {
     // Children before parents
     private static final List<String> TABLES = List.of("personal_link", "payment", "payment_request_membership", "payment_request", "bank_transaction",
             "bank_format", "reminder_email", "reminder_campaign", "reminder_opt_out", "audit_entry", "application", "external_payment",
-            "default_access", "app_setting", "membership_change", "membership", "sync_consumer", "fee_level", "registration", "access_change");
+            "default_access", "app_setting", "import_key", "membership_change", "membership", "sync_consumer", "fee_level", "registration", "access_change");
 
     @ServiceConnection
     private static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4")

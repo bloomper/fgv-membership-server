@@ -81,7 +81,7 @@ membership:
   mail:
     from: ${API_MAIL_FROM:${SMTP_FROM:noreply@localhost}}
   security:
-    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service,fgv-external-payment-service}
+    authorized-parties: ${API_SECURITY_AUTHORIZED_PARTIES:fgv-membership,fgv-spexregister-service,fgv-revival-service,fgv-external-payment-service,fgv-spexregister-migration}
   # The roles people hold on each application, lowest first. Granting a role grants the ones before it.
   # Service roles (SYNC, NOTIFY, IMPORT, REVIVAL, ...) are never listed.
   applications:
